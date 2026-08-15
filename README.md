@@ -12,9 +12,9 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | --- | --- | --- | --- |
 | `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话 | 强制开启（无开关） |
 | `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动刷新页面（开发测试快循环） | 强制开启（无开关） |
-| `delete-chat` | 会话管理 | 归档会话查看、单条/批量删除会话（合并自 dsh-delete-chat） | 开 |
+| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话（合并自 dsh-delete-chat） | 开 |
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关（合并自 dsh-plugin-toggle） | 开 |
-| `update-plugin` | 更新检查 | 检查并更新 profile 已安装插件；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」（合并自 dsh-update-plugin） | 开 |
+| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」（合并自 dsh-update-plugin） | 开 |
 
 ## 配置
 
@@ -35,7 +35,7 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 
 - `POST /dsh-tools/delete-chat/api/{list,delete}`
 - `POST /dsh-tools/plugin-toggle/api/{list,set}`
-- `POST /dsh-tools/update-plugin/api/{check,update}`
+- `POST /dsh-tools/update-plugin/api/{check,update,uninstall}`
 
 SSE 消息格式：`data: {"type":"turn-done","data":{"sessionId":"..."}}`。
 

@@ -10,14 +10,14 @@
  * Run:  node test/update-github-smoke.mjs
  */
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const tmp = mkdtempSync(join(tmpdir(), "dsh-tools-gh-smoke-"));
 process.env.DSH_HOME = tmp;
 
-const { classifySpec, parseGitHubSpec, versionFromTag, buildUpdateSpec, githubLatestTag } = await import("../lib/features/update-plugin.js");
+const { classifySpec, parseGitHubSpec, versionFromTag, buildUpdateSpec, githubLatestTag, uninstallPlugin } = await import("../lib/features/update-plugin.js");
 
 let failures = 0;
 function assert(cond, msg) {
@@ -180,6 +180,62 @@ assert(ghErr !== undefined && ghErr.error !== "" && /GitHub API 请求失败/.te
 assert(ghErr.outdated === false, "no version when probe fails");
 
 globalThis.fetch = realFetch;
+
+// --- uninstall flow (injected pnpm runner; real activation-layer sync) ---
+
+// a second fake package with bundle activation + a patch row
+mkdirSync(join(profileDir, "node_modules", "dsh-remove-me"), { recursive: true });
+writeFileSync(join(profileDir, "node_modules", "dsh-remove-me", "package.json"), JSON.stringify({
+	name: "dsh-remove-me",
+	version: "1.0.0",
+	dsh: { bundle: { patch: true } }
+}, null, 2));
+writeFileSync(join(profileDir, "package.json"), JSON.stringify({
+	name: "dsh-profile-web",
+	private: true,
+	dependencies: {
+		"dsh-skill-viewer": "github:someone/dsh-skill-viewer",
+		"dsh-link-dep": "link:E:/somewhere",
+		"dsh-remove-me": "1.0.0"
+	},
+	dsh: { profile: { bundles: ["dsh-remove-me"] } }
+}, null, 2));
+writeFileSync(join(profileDir, "cordis.patch.yml"),
+	"# fake profile patch\n- insert:\n    - id: pm-dsh-remove-me\n      name: 'dsh-remove-me'\n");
+
+// validation: package not in profile deps → error before any pnpm run
+result = await uninstallPlugin("not-installed");
+assert(result.ok === false && /不在 profile 依赖里/.test(result.error), "uninstall of unknown package rejected");
+
+// dsh-tools self-protection
+result = await uninstallPlugin("dsh-tools");
+assert(result.ok === false && /不能卸载 dsh-tools 自身/.test(result.error), "dsh-tools self-uninstall rejected");
+
+// success with an injected pnpm runner
+let capturedArgs = null;
+const stubRunner = async (...args) => { capturedArgs = args; return { code: 0, stdout: "", stderr: "" }; };
+result = await uninstallPlugin("dsh-remove-me", stubRunner);
+assert(result.ok === true && result.needsRestart === true, "uninstall returns ok envelope");
+assert(capturedArgs !== null && capturedArgs[0] !== undefined && capturedArgs[0][0] === "remove" && capturedArgs[0][1] === "dsh-remove-me", "pnpm remove invoked with the package name");
+// activation layer synced: bundles entry + patch row removed
+let manifest = JSON.parse(readFileSync(join(profileDir, "package.json"), "utf8"));
+assert(!(manifest.dsh.profile.bundles || []).includes("dsh-remove-me"), "bundles entry removed after uninstall");
+const patchText = readFileSync(join(profileDir, "cordis.patch.yml"), "utf8");
+assert(!patchText.includes("dsh-remove-me"), "patch row removed after uninstall");
+
+// runner failure surfaces as an error
+const failRunner = async () => ({ code: 1, stdout: "", stderr: "" });
+result = await uninstallPlugin("dsh-link-dep", failRunner);
+assert(result.ok === false && /pnpm remove/.test(result.error), "pnpm remove failure surfaces as error");
+
+// route-level: validation errors map to uninstall-failed, real pnpm never runs
+fakeApi.readJsonBody = async () => ({ packageName: "not-installed" });
+result = await call("uninstall", {});
+assert(result.ok === false && result.error.code === "uninstall-failed", "route maps unknown package to uninstall-failed");
+fakeApi.readJsonBody = async () => ({ packageName: "dsh-tools" });
+result = await call("uninstall", {});
+assert(result.ok === false && /不能卸载 dsh-tools 自身/.test(result.error.message), "route rejects dsh-tools self-uninstall");
+fakeApi.readJsonBody = async () => ({});
 
 // cleanup
 for (const dispose of effects) dispose();

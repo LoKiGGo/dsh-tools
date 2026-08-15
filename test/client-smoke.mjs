@@ -217,6 +217,19 @@ if (serverRender === undefined) {
 	// 空/未初始化 store → 视为首次打开
 	assert(decideCheck(undefined) === "check" && decideCheck(null) === "check", "missing store falls back to checking");
 
+	// --- 会话管理 load decision (pure function) ---
+
+	const decideLoad = captured.__dshToolsTest && captured.__dshToolsTest.deleteChatLoadDecision;
+	assert(typeof decideLoad === "function", "test hook exports deleteChatLoadDecision");
+	// 页面加载后首次打开面板 → 自动加载列表
+	assert(decideLoad({ autoLoaded: false, inFlight: false, data: null }) === "load", "first open after page load loads the list");
+	// 已自动加载过 → 恢复缓存结果，不再发起请求
+	assert(decideLoad({ autoLoaded: true, inFlight: false, data: { sessions: [] } }) === "restore", "later opens restore the cached list without a request");
+	// 加载仍在进行中（切走又切回）→ 等待，不重复发起
+	assert(decideLoad({ autoLoaded: true, inFlight: true, data: null }) === "wait", "an in-flight load is not duplicated");
+	// 空/未初始化 store → 视为首次打开
+	assert(decideLoad(undefined) === "load" && decideLoad(null) === "load", "missing store falls back to loading");
+
 dispose();
 
 if (failures > 0) {

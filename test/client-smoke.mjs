@@ -105,12 +105,14 @@ const fakeCtx = {
 
 const dispose = captured.apply(fakeCtx);
 assert(typeof dispose === "function", "apply returns a disposer");
-assert(registered.length === 2, "both slot entries registered");
+assert(registered.length === 3, "three slot entries registered");
 
 const settingsReg = registered.find((r) => r.opts.name === "settings.section");
 const overlayReg = registered.find((r) => r.opts.name === "shell.overlay");
+const catalogReg = registered.find((r) => r.opts.name === "settings.plugins.tab");
 assert(settingsReg !== undefined && settingsReg.opts.id === "dsh-tools" && settingsReg.opts.order === 35, "settings.section id dsh-tools order 35");
 assert(overlayReg !== undefined && overlayReg.opts.id === "dsh-tools-notify", "shell.overlay id dsh-tools-notify");
+assert(catalogReg !== undefined && catalogReg.opts.id === "plugin-catalog" && catalogReg.opts.order === 20 && catalogReg.opts.label === "插件分类", "settings.plugins.tab entry id plugin-catalog order 20");
 
 // --- initial render paths (needs react + react-dom/server) ---
 
@@ -135,6 +137,13 @@ if (serverRender === undefined) {
 	assert(overlayElement !== null, "overlay render returns an element (null allowed only after mount logic)");
 	const overlayHtml = serverRender(overlayElement);
 	assert(overlayHtml === "", "overlay renders empty before any toasts");
+
+	const catalogElement = catalogReg.render({});
+	assert(catalogElement !== null, "catalog tab render returns an element");
+	const catalogHtml = serverRender(catalogElement);
+	assert(catalogHtml.includes("插件分类"), "catalog heading present in rendered html");
+	assert(catalogHtml.includes("官方：安装 Harness 自带"), "catalog hint present in rendered html");
+	assert(catalogHtml.includes("正在读取插件"), "catalog renders loading state before config/data arrives");
 }
 
 	// --- turn-done decision logic (pure function, no DOM required) ---
@@ -203,6 +212,49 @@ if (serverRender === undefined) {
 		],
 	});
 	assert(tabs.length === 2 && tabs[0].key === "manage" && tabs[1].key === "a", "alwaysOn features get no tab of their own");
+	tabs = tabsOf({
+		features: [
+			{ key: "a", label: "功能A", enabled: true },
+			{ key: "catalog", label: "插件分类视图", enabled: true, panel: false },
+			{ key: "b", label: "功能B", enabled: true, panel: true },
+		],
+	});
+	assert(tabs.length === 3 && tabs[1].key === "a" && tabs[2].key === "b", "panel:false features get no settings tab; panel:true (and unset) are included");
+
+	// --- plugin-catalog pure helpers ---
+
+	const catalogFilterFn = captured.__dshToolsTest && captured.__dshToolsTest.catalogFilter;
+	const catalogCountsFn = captured.__dshToolsTest && captured.__dshToolsTest.catalogCounts;
+	const catalogShortFn = captured.__dshToolsTest && captured.__dshToolsTest.catalogModuleShortName;
+	const catalogTabReg = captured.__dshToolsTest && captured.__dshToolsTest.catalogTabRegistration;
+	const catalogGate = captured.__dshToolsTest && captured.__dshToolsTest.catalogFetchGate;
+	assert(typeof catalogFilterFn === "function" && typeof catalogCountsFn === "function" && typeof catalogShortFn === "function", "test hooks export catalog helpers");
+	assert(typeof catalogTabReg === "function" && typeof catalogGate === "function", "test hooks export catalog visibility helpers");
+
+	assert(catalogShortFn("@deepseek-ai/dsh-base") === "base", "short name strips the official scope and dsh- prefix (same rule as the official page)");
+	assert(catalogShortFn("@deepseek-ai/dsh-host-plugin-inventory") === "plugin-inventory", "short name strips dsh-host- prefix");
+	assert(catalogShortFn("dshmarket") === "dshmarket", "plain names pass through");
+	assert(catalogShortFn("cordis:server") === "server", "short name strips cordis: builtins");
+
+	const sampleEntries = [
+		{ entryId: "a", moduleName: "@deepseek-ai/dsh-base", category: "official", enabled: true, fiberPhase: "active" },
+		{ entryId: "b", moduleName: "dshmarket", category: "installed", enabled: true, fiberPhase: "active" },
+		{ entryId: "c", moduleName: "dsh-tools", category: "local", enabled: false, fiberPhase: null },
+		{ entryId: "d", moduleName: "dsh-better-sidebar", category: "installed", enabled: true, fiberPhase: "failed" },
+	];
+	const counts = catalogCountsFn(sampleEntries);
+	assert(counts.official === 1 && counts.installed === 2 && counts.local === 1, "catalog counts per category");
+	assert(catalogFilterFn(sampleEntries, "all", "").length === 4, "all category with empty query returns everything");
+	assert(catalogFilterFn(sampleEntries, "installed", "").length === 2, "installed category filters to installed entries");
+	assert(catalogFilterFn(sampleEntries, "all", "dsh-").length === 3, "query filters by module name");
+	assert(catalogFilterFn(sampleEntries, "all", "DSH-BASE").length === 1, "query is case-insensitive");
+	assert(catalogFilterFn(sampleEntries, "local", "market").length === 0, "category and query combine");
+
+	assert(catalogTabReg(null, "plugin-catalog") === true, "null config registers the tab optimistically");
+	assert(catalogTabReg({ features: [{ key: "plugin-catalog", enabled: false }] }, "plugin-catalog") === false, "disabled config hides the tab");
+	assert(catalogTabReg({ features: [{ key: "plugin-catalog", enabled: true }] }, "plugin-catalog") === true, "enabled config keeps the tab");
+	assert(catalogGate(null, "plugin-catalog") === "fetch", "null config fetches");
+	assert(catalogGate({ features: [{ key: "plugin-catalog", enabled: false }] }, "plugin-catalog") === "disabled", "disabled config skips the fetch");
 
 	// --- 更新检查 auto-check decision (pure function) ---
 

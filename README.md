@@ -15,6 +15,7 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话（合并自 dsh-delete-chat） | 开 |
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关（合并自 dsh-plugin-toggle） | 开 |
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」（合并自 dsh-update-plugin） | 开 |
+| `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
 
 ## 配置
 
@@ -29,6 +30,7 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 - `POST /dsh-tools/api/config/set` `{key, enabled}` — 改开关，写盘并热应用
 - `POST /dsh-tools/api/ping` — 健康检查（客户端重启探测用）
 - `POST /dsh-tools/api/restart` — 重启 dsh web（`restart.web` 启用时）
+- `POST /dsh-tools/api/plugin-catalog` — 插件分类投影：loader 条目 + 来源分类（`plugin-catalog` 启用时；分类规则见 `lib/features/plugin-catalog.js`）
 - `GET  /dsh-tools/api/events` — SSE 推送（`notify.task-done` 启用时）
 
 合并功能路由（对应功能启用时注册）：
@@ -107,7 +109,8 @@ explorer.exe 常驻（交互式桌面的常态）。若重启仍失败，把上�
 ## 测试
 
 ```sh
-node test/smoke.mjs            # 宿主框架：启动/配置热应用/SSE 管线/围栏/方法门控
+node test/smoke.mjs            # 宿主框架：启动/配置热应用/SSE 管线/围栏/方法门控/插件分类路由
+node test/plugin-catalog-smoke.mjs  # 插件分类：分类判定纯函数（scope/spec/余量桶/投影）
 node test/client-smoke.mjs     # 客户端 bundle：执行/槽位注册/初始渲染/提示判定逻辑
 node test/mutations-smoke.mjs  # 合并 plugin-toggle 的 profile 文件改写（假 profile）
 node test/restart-launcher-smoke.mjs  # 一键重启启动器（真实生成器文本，无害载荷）
@@ -115,7 +118,7 @@ node test/explorer-dispatch-smoke.mjs # explorer 分发链（cmd→隐藏 powers
 node test/restart-sequence-smoke.mjs  # 真实 restart 方法：响应+自退出（一次性牺牲进程）
 ```
 
-六个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
+七个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
 隔离，绝不触碰真实 profile）。注意：`restart-sequence-smoke.mjs` 的
 "复活进程"阶段在 DSH agent 沙箱内无法完成 explorer 分发链而跳过——
 在普通终端运行该测试会完整断言整条重生链。

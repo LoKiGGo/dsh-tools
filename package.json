@@ -1,6 +1,6 @@
 {
   "name": "dsh-tools",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "DSH web plugin: personal toolbox with per-feature toggles, task-done corner notification, and one-click dsh web restart.",
   "type": "module",
   "main": "lib/index.js",

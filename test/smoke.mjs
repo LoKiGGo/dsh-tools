@@ -197,7 +197,7 @@ fakeCtx.get = (name) => {
 	}
 	if (name === "subprocess") {
 		return {
-			resolveExecutable: async () => "explorer.exe",
+			resolveExecutable: async (requested) => requested,
 			spawn: (spec) => {
 				spawns.push(spec);
 				return { done: Promise.resolve({ exitCode: 0 }), collected: {} };
@@ -216,14 +216,16 @@ assert(listed.find((s) => s.id === "session-2").workspace.id === "ws-b", "second
 assert(listed.find((s) => s.id === "session-3").workspace.id === "ws-a" && listed.find((s) => s.id === "session-3").workspace.title === "工作区A", "workspace id and title carried");
 assert(listed.find((s) => s.id === "session-4").workspace === null, "sessions outside every workspace carry workspace null");
 
-// --- delete-chat open-folder: workspace whitelist + explorer spawn (v0.6.0) ---
+// --- delete-chat open-folder: workspace whitelist + launcher spawn (v0.6.1) ---
 
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "C:\\work\\a" });
 assert(r.status === 200 && r.body.ok === true && r.body.value.ok === true, "open-folder opens a known workspace");
-assert(spawns.length === 1 && spawns[0].argv[0] === "explorer.exe" && spawns[0].argv[1] === "C:\\work\\a", "explorer spawned with the exact workspace path");
+const scriptFile = join(tmp, "profiles", "web", "plugins-data", "dsh-tools-open-folder.ps1");
+assert(existsSync(scriptFile), "open-folder launcher script written");
+assert(spawns.length === 1 && spawns[0].argv[0] === "powershell.exe" && spawns[0].argv.includes("-File") && spawns[0].argv.includes(scriptFile) && spawns[0].argv[spawns[0].argv.length - 1] === "C:\\work\\a", "powershell launcher spawned with the workspace path");
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "C:\\evil" });
 assert(r.status === 200 && r.body.ok === true && r.body.value.ok === false && r.body.value.error === "not-a-workspace", "non-workspace path rejected");
-assert(spawns.length === 1, "rejected path never spawns explorer");
+assert(spawns.length === 1, "rejected path never spawns the launcher");
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "" });
 assert(r.body.value.ok === false && r.body.value.error === "bad-request", "empty path rejected");
 

@@ -173,6 +173,7 @@ r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-cha
 
 // --- delete-chat list: workspace grouping metadata (fake services) ---
 
+const spawns = [];
 fakeCtx.get = (name) => {
 	if (name === "sessionQuery") {
 		return {
@@ -194,6 +195,15 @@ fakeCtx.get = (name) => {
 			],
 		};
 	}
+	if (name === "subprocess") {
+		return {
+			resolveExecutable: async () => "explorer.exe",
+			spawn: (spec) => {
+				spawns.push(spec);
+				return { done: Promise.resolve({ exitCode: 0 }), collected: {} };
+			},
+		};
+	}
 	return undefined;
 };
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-chat", enabled: true });
@@ -205,6 +215,17 @@ assert(listed.find((s) => s.id === "session-1").workspace.path === "C:\\work\\a"
 assert(listed.find((s) => s.id === "session-2").workspace.id === "ws-b", "second workspace mapped");
 assert(listed.find((s) => s.id === "session-3").workspace.id === "ws-a" && listed.find((s) => s.id === "session-3").workspace.title === "工作区A", "workspace id and title carried");
 assert(listed.find((s) => s.id === "session-4").workspace === null, "sessions outside every workspace carry workspace null");
+
+// --- delete-chat open-folder: workspace whitelist + explorer spawn (v0.6.0) ---
+
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "C:\\work\\a" });
+assert(r.status === 200 && r.body.ok === true && r.body.value.ok === true, "open-folder opens a known workspace");
+assert(spawns.length === 1 && spawns[0].argv[0] === "explorer.exe" && spawns[0].argv[1] === "C:\\work\\a", "explorer spawned with the exact workspace path");
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "C:\\evil" });
+assert(r.status === 200 && r.body.ok === true && r.body.value.ok === false && r.body.value.error === "not-a-workspace", "non-workspace path rejected");
+assert(spawns.length === 1, "rejected path never spawns explorer");
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "" });
+assert(r.body.value.ok === false && r.body.value.error === "bad-request", "empty path rejected");
 
 // --- plugin-catalog: classification API (real route, fake manifest + loader) ---
 
@@ -249,6 +270,56 @@ r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "plugin-cat
 assert(r.body.value.features.find((f) => f.key === "plugin-catalog").enabled === true, "config/set re-enables plugin-catalog");
 r = await call(apiRoute, "POST", "/dsh-tools/api/plugin-catalog", {});
 assert(r.status === 200 && r.body.ok === true, "plugin-catalog method works again after re-enable");
+
+// --- plugin-toggle list: description + GitHub home (v0.6.0) ---
+
+mkdirSync(join(fakeProfile, "node_modules", "dshmarket"), { recursive: true });
+writeFileSync(join(fakeProfile, "node_modules", "dshmarket", "package.json"), JSON.stringify({
+	name: "dshmarket",
+	version: "1.4.1",
+	description: "可视化插件市场",
+	repository: { type: "git", url: "git+https://github.com/dsh-market/dsh-market.git" },
+}, null, 2) + "\n");
+mkdirSync(join(fakeProfile, "node_modules", "dsh-skill-viewer"), { recursive: true });
+writeFileSync(join(fakeProfile, "node_modules", "dsh-skill-viewer", "package.json"), JSON.stringify({
+	name: "dsh-skill-viewer",
+	version: "0.3.1",
+	description: "技能浏览插件",
+}, null, 2) + "\n");
+const ptRoute = routes.find((x) => x.path === "/dsh-tools/plugin-toggle/api");
+assert(ptRoute !== undefined, "plugin-toggle route registered");
+r = await call(ptRoute, "POST", "/dsh-tools/plugin-toggle/api/list", {});
+assert(r.status === 200 && r.body.ok === true, "plugin-toggle list returns ok envelope");
+const ptList = r.body.value.plugins;
+const mkt = ptList.find((p) => p.name === "dshmarket");
+assert(mkt !== undefined && mkt.description === "可视化插件市场" && Array.isArray(mkt.descriptions) && mkt.descriptions.length === 1 && mkt.descriptions[0] === "可视化插件市场", "registry plugin carries its package description");
+assert(mkt.home === "https://github.com/dsh-market/dsh-market", "registry plugin home derived from repository field");
+const sv = ptList.find((p) => p.name === "dsh-skill-viewer");
+assert(sv !== undefined && sv.home === "https://github.com/someone/dsh-skill-viewer", "github: spec plugin home derived from spec");
+assert(sv.description === "技能浏览插件" && sv.descriptions.length === 1, "github plugin carries its package description");
+const dt = ptList.find((p) => p.name === "dsh-tools");
+assert(dt !== undefined && dt.home === null && dt.description === "" && dt.descriptions.length === 0, "link: spec plugin has no home/description");
+
+// --- github-ref: homepage derivation chain (v0.6.0) ---
+
+const { githubUrlOf, parseGithubSpec, isChinese, orderDescriptions } = await import("../lib/features/github-ref.js");
+assert(githubUrlOf("github:a/b", null) === "https://github.com/a/b", "github: spec → homepage");
+assert(githubUrlOf("github:a/b#v1.2.3", null) === "https://github.com/a/b", "github: spec with #tag → homepage");
+assert(githubUrlOf("https://github.com/a/b/releases/download/v1/x.tgz", null) === "https://github.com/a/b", "release download URL → homepage");
+assert(githubUrlOf("https://github.com/a/b/archive/refs/tags/v1.tar.gz", null) === "https://github.com/a/b", "archive tarball URL → homepage");
+assert(githubUrlOf("link:E:/x", null) === null, "link: spec → null");
+assert(githubUrlOf("^1.0.0", null) === null, "semver spec without repo → null");
+assert(githubUrlOf("^1.0.0", { repository: "git+https://github.com/u/r.git" }) === "https://github.com/u/r", "repository string (git+https) → homepage");
+assert(githubUrlOf("^1.0.0", { repository: { url: "https://github.com/u/r.git" } }) === "https://github.com/u/r", "repository.url object → homepage");
+assert(githubUrlOf("^1.0.0", { repository: "git@github.com:u/r.git" }) === "https://github.com/u/r", "repository ssh form → homepage");
+assert(githubUrlOf("^1.0.0", {}) === null, "repository missing → null");
+assert(githubUrlOf("", null) === null, "empty spec → null");
+const gs = parseGithubSpec("github:u/r#v2");
+assert(gs !== null && gs.owner === "u" && gs.repo === "r" && gs.tag === "v2", "parseGithubSpec in github-ref keeps the shared shape");
+assert(isChinese("中文描述") === true && isChinese("English only") === false, "CJK detection for zh-first ordering");
+assert(orderDescriptions(["English desc", "", "中文描述", "English desc"]).join("|") === "中文描述|English desc", "descriptions ordered Chinese-first and deduped");
+assert(orderDescriptions(["", null, "   "]).length === 0, "empty candidates dropped");
+assert(orderDescriptions(["only english"]).join("|") === "only english", "english-only candidate stays single");
 
 // --- trust fence ---
 const crossReq = fakeReq("POST", "/dsh-tools/api/config", {});

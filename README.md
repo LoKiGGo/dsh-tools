@@ -14,28 +14,24 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | --- | --- | --- | --- |
 | `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话 | 强制开启（无开关） |
 | `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动刷新页面（开发测试快循环） | 强制开启（无开关） |
-| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话 | 开 |
-| `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关 | 开 |
-| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:`/URL spec，Releases/tags API 探测）两类安装来源；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
+| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话；删除会话页点击工作区路径可打开对应文件夹 | 开 |
+| `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关；点击插件名可跳转其 GitHub 页（有则显示），行内展示插件功能描述 | 开 |
+| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:`/URL spec，Releases/tags API 探测）两类安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
 
 ## 安装
 
-dsh-tools 是 DSH web profile 的常驻插件（bundle 插件，`dsh.bundle.patch` 激活）。
-安装方式任选其一（均需把 `"dsh-tools"` 加入 profile `package.json` 的
-`dsh.profile.bundles` 数组）：
+dsh-tools 是 DSH web profile 的常驻插件（bundle 插件）。傻瓜式安装，一条命令：
 
-- **npm**：在 profile 目录执行 `npm i dsh-tools`（或 `pnpm add dsh-tools`）；
-- **GitHub spec**：`pnpm add github:<owner>/dsh-tools`；
-- **本地开发（link）**：克隆本仓库后，在 profile 的 `package.json` 添加依赖
-  `"dsh-tools": "link:E:/<仓库绝对路径>"`（forward slashes 绝对路径，Windows 示例）。
-
-```jsonc
-// profile package.json
-"dsh": { "profile": { "bundles": [ /* ...现有条目... */, "dsh-tools" ] } }
+```bash
+dsh plugin --profile web add dsh-tools
 ```
 
-重启 `dsh web`，从 设置 →「dsh 工具箱」管理各功能开关。
+该命令自动完成：依赖安装（npm 官方源分发）+ 激活层写入（`dsh.profile.bundles`）。
+执行后**重启 dsh web**，从 设置 →「dsh 工具箱」管理各功能开关。
+
+> 提示：裸 `pnpm add` / `npm i` 只安装依赖、**不会激活插件**（依赖 ≠ 激活）；
+> 激活靠 `dsh.profile.bundles` 列表，`dsh plugin add` 会自动写入。
 
 已装有 dsh-tools 且依赖 spec 为 `github:` 形式的环境，更新检查页签会通过
 GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新会固定到 `#tag`）。

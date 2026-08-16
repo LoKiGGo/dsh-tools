@@ -6,16 +6,40 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 每个已启用的可选功能一个页签入口（页签超出宽度时可按住左右拖动查看）；
 开关即时生效并持久化（重启后保留）。
 
+> ⚠️ **使用提示**：本插件纯 AI 制作，无人工含量，可能后续不会对其进行维护，请谨慎使用。
+
 ## 当前功能
 
 | key | 功能 | 说明 | 默认 |
 | --- | --- | --- | --- |
 | `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话 | 强制开启（无开关） |
 | `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动刷新页面（开发测试快循环） | 强制开启（无开关） |
-| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话（合并自 dsh-delete-chat） | 开 |
-| `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关（合并自 dsh-plugin-toggle） | 开 |
-| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」（合并自 dsh-update-plugin） | 开 |
+| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话 | 开 |
+| `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关 | 开 |
+| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:`/URL spec，Releases/tags API 探测）两类安装来源；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
+
+## 安装
+
+dsh-tools 是 DSH web profile 的常驻插件（plain plugin，patch 行激活）。
+把本仓库克隆/下载到本地后：
+
+1. 在 profile 的 `package.json` 添加依赖（forward slashes 绝对路径，Windows 示例）：
+   `"dsh-tools": "link:E:/<仓库绝对路径>"`；
+2. 在 profile 的 `cordis.patch.yml` 添加激活行：
+
+   ```yaml
+   - insert:
+       - id: dsh-tools
+         name: 'dsh-tools'
+   ```
+
+3. 重启 `dsh web`，从 设置 →「dsh 工具箱」管理各功能开关。
+
+备选安装：直接 `pnpm add github:<owner>/dsh-tools`（pnpm 从 GitHub 拉取，
+依赖 spec 变为 `github:<owner>/dsh-tools`）。已装有 dsh-tools 且依赖 spec
+为 `github:` 形式的环境，更新检查页签会通过 GitHub Releases/tags API
+自动检测本仓库新版本并一键更新（更新会固定到 `#tag`）。
 
 ## 配置
 
@@ -112,24 +136,18 @@ explorer.exe 常驻（交互式桌面的常态）。若重启仍失败，把上�
 node test/smoke.mjs            # 宿主框架：启动/配置热应用/SSE 管线/围栏/方法门控/插件分类路由
 node test/plugin-catalog-smoke.mjs  # 插件分类：分类判定纯函数（scope/spec/余量桶/投影）
 node test/client-smoke.mjs     # 客户端 bundle：执行/槽位注册/初始渲染/提示判定逻辑
-node test/mutations-smoke.mjs  # 合并 plugin-toggle 的 profile 文件改写（假 profile）
+node test/mutations-smoke.mjs  # profile 文件改写（plugin-toggle / update-plugin，假 profile）
+node test/update-github-smoke.mjs   # GitHub 安装来源：spec 分类/解析/版本探测/检查流程（假 profile）
 node test/restart-launcher-smoke.mjs  # 一键重启启动器（真实生成器文本，无害载荷）
 node test/explorer-dispatch-smoke.mjs # explorer 分发链（cmd→隐藏 powershell）
 node test/restart-sequence-smoke.mjs  # 真实 restart 方法：响应+自退出（一次性牺牲进程）
 ```
 
-七个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
-隔离，绝不触碰真实 profile）。注意：`restart-sequence-smoke.mjs` 的
-"复活进程"阶段在 DSH agent 沙箱内无法完成 explorer 分发链而跳过——
-在普通终端运行该测试会完整断言整条重生链。
-
-## 迁移说明（合并旧本地插件）
-
-迁移已完成：三个旧插件（`dsh-delete-chat` / `dsh-plugin-toggle` /
-`dsh-update-plugin`）已**彻底卸载删除**——依赖、junction、源码目录均已
-移除，行为由 dsh-tools 的合并功能承接。时间戳备份保留在
-`plugins-backup\`，如需回退：从备份恢复源码 → 重新
-添加 `link:` 依赖 + 激活行 → 重启。
+八个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
+隔离；仅 `client-smoke.mjs` 以只读方式解析真实 profile 中的 react 用于
+可选的服务端渲染，其余测试绝不触碰真实 profile）。注意：
+`restart-sequence-smoke.mjs` 的"复活进程"阶段在 DSH agent 沙箱内无法
+完成 explorer 分发链而跳过——在普通终端运行该测试会完整断言整条重生链。
 
 ## 任务完成提示（桌面通知）说明
 
@@ -140,7 +158,7 @@ Windows 会把它渲染成屏幕右下角**置顶**的系统提示框，点击�
 页面内提示框（页面未聚焦时不可见）。Windows「专注助手」开启时系统
 可能吞掉通知。
 
-## 已知边界（v1）
+## 已知边界
 
 - 多标签页各自弹各自的任务完成提示；
 - 子代理完成不提示（宿主按根 Agent 过滤）；

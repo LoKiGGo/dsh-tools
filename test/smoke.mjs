@@ -136,6 +136,18 @@ const sseForcedRes = fakeRes();
 await apiRoute.handler(fakeReq("GET", "/dsh-tools/api/events", {}), sseForcedRes);
 assert(sseForcedRes.status === 200, "GET events still streams after the disable attempt");
 
+// --- isRootAgent: id-based comparison survives instance churn ---
+const { isRootAgent } = await import("../lib/features/notify-task-done.js");
+const rootsA = [{ id: "root-1" }, { id: "root-2" }];
+assert(isRootAgent({ roots: () => rootsA }, { id: "root-2" }) === true, "root agent by id passes");
+assert(isRootAgent({ roots: () => [{ id: "root-1" }, { id: "root-2" }] }, { id: "root-2" }) === true, "different instance with the same id still passes (identity-churn safe)");
+assert(isRootAgent({ roots: () => rootsA }, { id: "sub-9" }) === false, "non-root agent filtered out");
+assert(isRootAgent(undefined, { id: "x" }) === true, "missing agents service falls back to accept");
+assert(isRootAgent({ roots: () => { throw new Error("boom"); } }, { id: "x" }) === true, "roots() failure falls back to accept");
+assert(isRootAgent({ roots: () => [] }, { id: "x" }) === false, "empty roots filters everything");
+assert(isRootAgent({ roots: () => rootsA }, undefined) === false, "missing agent payload is filtered");
+
+
 // --- alwaysOn forcing for the restart feature (never invoked here) ---
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "restart.web", enabled: false });
 assert(r.body.value.features.find((f) => f.key === "restart.web").enabled === true, "restart.web cannot be disabled (alwaysOn)");

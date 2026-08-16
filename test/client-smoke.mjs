@@ -11,9 +11,12 @@
  */
 
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
-const PROFILE_NODE_MODULES = "D:/profile/node_modules";
+// Resolved at runtime so the public repo carries no machine-specific path.
+const PROFILE_NODE_MODULES = join(homedir(), ".dsh/profiles/web/node_modules");
 
 function resolveFromProfile(name) {
 	try {

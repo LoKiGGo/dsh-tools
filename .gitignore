@@ -1,0 +1,20 @@
+# 缓存目录（DSH 运行产物）
+.cache/
+.electron-cache/
+.npm-cache/
+
+# 依赖
+node_modules/
+
+# 插件备份（旧版本不入库，仅作磁盘回滚）
+plugins-backup/
+
+# 敏感凭据（API key 等）——严禁提交
+新建 文本文档.txt
+*.key
+*.pem
+.credentials.yaml
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db

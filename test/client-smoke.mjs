@@ -282,6 +282,41 @@ if (serverRender === undefined) {
 	// 空/未初始化 store → 视为首次打开
 	assert(decideLoad(undefined) === "load" && decideLoad(null) === "load", "missing store falls back to loading");
 
+	// --- 会话管理 workspace grouping (pure function) ---
+
+	const groupSessions = captured.__dshToolsTest && captured.__dshToolsTest.groupSessionsByWorkspace;
+	assert(typeof groupSessions === "function", "test hook exports groupSessionsByWorkspace");
+
+	const wsA = { id: "ws-a", path: "C:\\work\\a", title: "工作区A" };
+	const wsB = { id: "ws-b", path: "D:\\repo\\b", title: "工作区B" };
+	const sampleSessions = [
+		{ id: "s1", title: "会话1", createdAt: 3000, workspace: wsA },
+		{ id: "s2", title: "会话2", createdAt: 1000, workspace: wsB },
+		{ id: "s3", title: "会话3", createdAt: 2000, workspace: wsA },
+		{ id: "s4", title: "会话4", createdAt: 4000, workspace: null },
+	];
+	const groups = groupSessions(sampleSessions);
+	assert(groups.length === 3, "sessions grouped by workspace");
+	assert(groups[0].key === "C:\\work\\a" && groups[1].key === "D:\\repo\\b" && groups[2].key === "ungrouped", "groups sorted by path, ungrouped last");
+	assert(groups[0].title === "工作区A" && groups[0].path === "C:\\work\\a", "group title prefers workspace title, path carried");
+	assert(groups[2].title === "未分组" && groups[2].path === null, "ungrouped group uses the fallback title");
+	assert(groups[0].sessions.length === 2 && groups[0].sessions[0].id === "s1" && groups[0].sessions[1].id === "s3", "within-group order newest first");
+	assert(groups[1].sessions.length === 1 && groups[1].sessions[0].id === "s2", "single-session group kept");
+	assert(groups[2].sessions.length === 1 && groups[2].sessions[0].id === "s4", "ungrouped sessions listed in their group");
+	assert(groupSessions([]).length === 0, "empty list yields no groups");
+	assert(groupSessions(undefined).length === 0, "missing list yields no groups");
+	assert(groupSessions(null).length === 0, "null list yields no groups");
+	// workspace 字段缺失 → 归入未分组
+	assert(groupSessions([{ id: "x", createdAt: 1 }])[0].key === "ungrouped", "sessions without workspace fall into 未分组");
+	// 组内顺序稳定：createdAt 相同保持输入顺序
+	const tie = groupSessions([
+		{ id: "a", createdAt: 5, workspace: wsA },
+		{ id: "b", createdAt: 5, workspace: wsA },
+	]);
+	assert(tie[0].sessions[0].id === "a" && tie[0].sessions[1].id === "b", "equal createdAt keeps input order (stable sort)");
+	// workspace 只有 title 没有 path（异常数据）→ 按 title 分组兜底不行则归未分组
+	assert(groupSessions([{ id: "y", createdAt: 1, workspace: { title: "无路径" } }])[0].key === "ungrouped", "workspace without path falls into 未分组");
+
 dispose();
 
 if (failures > 0) {

@@ -159,6 +159,41 @@ const dcRoutes = routes.filter((x) => x.path === "/dsh-tools/delete-chat/api");
 assert(dcRoutes.length === 2, "delete-chat route re-registered after toggle cycle");
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-chat", enabled: false });
 
+// --- delete-chat list: workspace grouping metadata (fake services) ---
+
+fakeCtx.get = (name) => {
+	if (name === "sessionQuery") {
+		return {
+			listSessions: async () => [
+				{ header: { id: "session-1", createdAt: 1000 }, live: false, persisted: true },
+				{ header: { id: "session-2", createdAt: 2000 }, live: false, persisted: true },
+				{ header: { id: "session-3", createdAt: 3000 }, live: true, persisted: true },
+				{ header: { id: "session-4", createdAt: 4000 }, live: false, persisted: true },
+			],
+			readTitleSnapshots: async (ids) => ids.map((sessionId) => ({ sessionId, status: "fulfilled", value: { title: { title: "标题-" + sessionId } } })),
+		};
+	}
+	if (name === "workspaceRegistry") {
+		return {
+			archivedSessionIds: [],
+			list: () => [
+				{ id: "ws-a", path: "C:\\work\\a", title: "工作区A", sessionIds: ["session-1", "session-3"] },
+				{ id: "ws-b", path: "D:\\repo\\b", title: "工作区B", sessionIds: ["session-2"] },
+			],
+		};
+	}
+	return undefined;
+};
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-chat", enabled: true });
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/list", {});
+assert(r.status === 200 && r.body.ok === true, "delete-chat list succeeds with services present");
+const listed = r.body.value;
+assert(listed.length === 4, "list returns all sessions");
+assert(listed.find((s) => s.id === "session-1").workspace.path === "C:\\work\\a", "session workspace resolved from workspaceRegistry");
+assert(listed.find((s) => s.id === "session-2").workspace.id === "ws-b", "second workspace mapped");
+assert(listed.find((s) => s.id === "session-3").workspace.id === "ws-a" && listed.find((s) => s.id === "session-3").workspace.title === "工作区A", "workspace id and title carried");
+assert(listed.find((s) => s.id === "session-4").workspace === null, "sessions outside every workspace carry workspace null");
+
 // --- plugin-catalog: classification API (real route, fake manifest + loader) ---
 
 const fakeProfile = join(tmp, "profiles", "web");

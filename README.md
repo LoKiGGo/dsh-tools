@@ -21,25 +21,24 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 
 ## 安装
 
-dsh-tools 是 DSH web profile 的常驻插件（plain plugin，patch 行激活）。
-把本仓库克隆/下载到本地后：
+dsh-tools 是 DSH web profile 的常驻插件（bundle 插件，`dsh.bundle.patch` 激活）。
+安装方式任选其一（均需把 `"dsh-tools"` 加入 profile `package.json` 的
+`dsh.profile.bundles` 数组）：
 
-1. 在 profile 的 `package.json` 添加依赖（forward slashes 绝对路径，Windows 示例）：
-   `"dsh-tools": "link:E:/<仓库绝对路径>"`；
-2. 在 profile 的 `cordis.patch.yml` 添加激活行：
+- **npm**：在 profile 目录执行 `npm i dsh-tools`（或 `pnpm add dsh-tools`）；
+- **GitHub spec**：`pnpm add github:<owner>/dsh-tools`；
+- **本地开发（link）**：克隆本仓库后，在 profile 的 `package.json` 添加依赖
+  `"dsh-tools": "link:E:/<仓库绝对路径>"`（forward slashes 绝对路径，Windows 示例）。
 
-   ```yaml
-   - insert:
-       - id: dsh-tools
-         name: 'dsh-tools'
-   ```
+```jsonc
+// profile package.json
+"dsh": { "profile": { "bundles": [ /* ...现有条目... */, "dsh-tools" ] } }
+```
 
-3. 重启 `dsh web`，从 设置 →「dsh 工具箱」管理各功能开关。
+重启 `dsh web`，从 设置 →「dsh 工具箱」管理各功能开关。
 
-备选安装：直接 `pnpm add github:<owner>/dsh-tools`（pnpm 从 GitHub 拉取，
-依赖 spec 变为 `github:<owner>/dsh-tools`）。已装有 dsh-tools 且依赖 spec
-为 `github:` 形式的环境，更新检查页签会通过 GitHub Releases/tags API
-自动检测本仓库新版本并一键更新（更新会固定到 `#tag`）。
+已装有 dsh-tools 且依赖 spec 为 `github:` 形式的环境，更新检查页签会通过
+GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新会固定到 `#tag`）。
 
 ## 配置
 

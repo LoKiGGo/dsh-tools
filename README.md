@@ -19,25 +19,22 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:`/URL spec，Releases/tags API 探测）两类安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
 | `question.collapse` | 提问面板折叠 | agent 提问时（ask_user / plan 审批等）可在提问面板 header 内一键折叠为紧凑小条（回答草稿保留），再点展开 | 开 |
-| `ui.markdown` | Markdown 渲染 | 用户消息按 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）；关闭时与原生纯文本外观一致 | 关 |
-| `ui.history` | 浮动历史条 | 会话内容区边缘浮动历史记录条：悬停波浪高亮、点击跳转对应回合，支持「悬挂」（位置 / 数量在「界面增强」页签配置） | 关 |
+| `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置） | 关 |
 | `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数），趋势柱图与会话排行 | 关 |
-| `ui.appearance` | 外观 | 「外观」页签：6 套预设、壁纸、玻璃档位、强调色（可自动从壁纸取色 / 随机灵感）、各表面不透明度、字体与缩放、精细项与自定义 CSS / 变量，改动即时生效 | 关 |
 
 ## 融合功能与参考来源
 
-v0.7.0 起融合了三个开源插件的功能（均 MIT 许可，源码文件头与下方条目
-标注来源；融合版默认关闭，开启后行为与上游一致，但配置存 dsh-tools
-自身的 `featureConfig`，设置入口统一在「dsh 工具箱」内）：
+融合了开源插件的功能（均 MIT 许可，源码文件头与下方条目标注来源；融合版
+默认关闭，开启后行为与上游一致，但配置存 dsh-tools 自身的 `featureConfig`，
+设置入口统一在「dsh 工具箱」内）：
 
 | 功能 | 来源 | 许可 |
 | --- | --- | --- |
 | `question.collapse` 提问面板折叠 | [Townrain/dsh-question-panel-collapse](https://github.com/Townrain/dsh-question-panel-collapse) | MIT（Copyright (c) 2026 Townrain） |
-| `ui.markdown` / `ui.history` / `ui.usage` / `ui.appearance` | [yoli-mi/dsh-client-ui-custom](https://github.com/yoli-mi/dsh-client-ui-custom) | MIT（Copyright (c) 2026 Yoli-mi） |
+| `ui.enhance`（Markdown 渲染 + 浮动历史条）/ `ui.usage` | [yoli-mi/dsh-client-ui-custom](https://github.com/yoli-mi/dsh-client-ui-custom) | MIT（Copyright (c) 2026 Yoli-mi） |
 
-> 说明：ui-custom 的 `shortcuts`（快捷键）与 `marketplace`（插件市场）两个
-> 模块未融合；appearance 的「小窗 / 全屏预览」未移植（保存即生效，可随时
-> 调整回看）。
+> 说明：ui-custom 的 `appearance`（外观）、`shortcuts`（快捷键）与
+> `marketplace`（插件市场）模块未融合。
 
 ## 安装
 

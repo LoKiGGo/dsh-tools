@@ -258,26 +258,17 @@ if (serverRender === undefined) {
 	assert(tabs.length === 3 && tabs[1].key === "a" && tabs[2].key === "b", "panel:false features get no settings tab; panel:true (and unset) are included");
 	tabs = tabsOf({
 		features: [
-			{ key: "ui.history", label: "浮动历史条", enabled: true, panel: false },
-			{ key: "ui.markdown", label: "Markdown 渲染", enabled: false, panel: false },
-			{ key: "a", label: "功能A", enabled: true },
+			{ key: "ui.enhance", label: "界面增强", enabled: true, panel: true },
+			{ key: "a", label: "功能A", enabled: false },
 		],
 	});
-	assert(tabs.length === 3 && tabs[1].key === "a" && tabs[2].key === "ui-enhance", "enabled ui.history adds the merged 界面增强 tab");
+	assert(tabs.length === 2 && tabs[1].key === "ui.enhance", "enabled panel feature ui.enhance gets its own tab");
 	tabs = tabsOf({
 		features: [
-			{ key: "ui.history", label: "浮动历史条", enabled: false, panel: false },
-			{ key: "ui.markdown", label: "Markdown 渲染", enabled: true, panel: false },
+			{ key: "ui.enhance", label: "界面增强", enabled: false, panel: true },
 		],
 	});
-	assert(tabs.length === 2 && tabs[1].key === "ui-enhance", "enabled ui.markdown alone also adds the merged tab");
-	tabs = tabsOf({
-		features: [
-			{ key: "ui.history", label: "浮动历史条", enabled: false, panel: false },
-			{ key: "ui.markdown", label: "Markdown 渲染", enabled: false, panel: false },
-		],
-	});
-	assert(tabs.length === 1, "both enhancers disabled → no 界面增强 tab");
+	assert(tabs.length === 1, "disabled ui.enhance yields no tab");
 	tabs = tabsOf({
 		features: [
 			{ key: "ui.usage", label: "应用用量", enabled: true, panel: true },
@@ -285,42 +276,6 @@ if (serverRender === undefined) {
 		],
 	});
 	assert(tabs.length === 2 && tabs[1].key === "ui.usage", "enabled panel feature ui.usage gets its own tab");
-	tabs = tabsOf({
-		features: [
-			{ key: "ui.appearance", label: "外观", enabled: true, panel: true },
-		],
-	});
-	assert(tabs.length === 2 && tabs[1].key === "ui.appearance", "enabled panel feature ui.appearance gets its own tab");
-
-	// --- appearance pipeline pure functions (ui.appearance) ---
-
-	const normalizeFn = captured.__dshToolsTest && captured.__dshToolsTest.normalizeConfig;
-	const resolvePresetFn = captured.__dshToolsTest && captured.__dshToolsTest.resolvePreset;
-	const harmonyFn = captured.__dshToolsTest && captured.__dshToolsTest.harmonySwatches;
-	const dominantFn = captured.__dshToolsTest && captured.__dshToolsTest.dominantColorFromRgba;
-	const randomFn = captured.__dshToolsTest && captured.__dshToolsTest.randomInspirationConfig;
-	assert(typeof normalizeFn === "function" && typeof resolvePresetFn === "function" && typeof harmonyFn === "function" && typeof dominantFn === "function" && typeof randomFn === "function", "test hooks export appearance helpers");
-
-	const neutral = normalizeFn(undefined, undefined);
-	assert(neutral.wallpaper === "" && neutral.accent === "#4176e6" && neutral.surfaceOpacity === 100 && neutral.glass === "frosted", "normalizeConfig yields neutral defaults from nothing");
-	const clamped = normalizeFn({ surfaceOpacity: 250, wallpaperBlur: 999, fontScale: 3, glass: "nope", customVars: { "--a": 3, "--b": {} } }, undefined);
-	assert(clamped.surfaceOpacity === 100 && clamped.wallpaperBlur === 60 && clamped.fontScale === 1.1 && clamped.glass === "frosted", "normalizeConfig clamps out-of-range values");
-	assert(clamped.customVars["--a"] === "3" && clamped.customVars["--b"] === undefined, "customVars coerces scalars only");
-	const presetCfg = resolvePresetFn("ink-teal");
-	assert(presetCfg !== undefined && presetCfg.accent === "#1e8f7e", "resolvePreset finds the ink-teal preset");
-	assert(resolvePresetFn("") === undefined && resolvePresetFn("nope") === undefined, "resolvePreset rejects unknown ids");
-	const withPreset = normalizeFn({ accent: "#ff0000" }, presetCfg);
-	assert(withPreset.accent === "#ff0000" && withPreset.surfaceOpacity === 40, "explicit config wins over the preset, preset fills the rest");
-	const swatches = harmonyFn("#4176e6");
-	assert(swatches.length === 7 && swatches[0] === "#4176e6", "harmonySwatches yields base-first swatches");
-	assert(harmonyFn("not-a-color").length === 0, "harmonySwatches rejects invalid hex");
-	let calls = 0;
-	const rng = () => { calls += 1; return 0.5; };
-	const idea = randomFn(rng);
-	assert(typeof idea.accent === "string" && idea.accent.startsWith("#") && idea.wallpaper === "", "randomInspirationConfig yields a full partial config");
-	assert(calls > 0, "injectable RNG is actually used");
-	const pixels = new Uint8ClampedArray([65, 118, 230, 255, 255, 255, 255, 255]);
-	assert(dominantFn(pixels) === "#4176e6", "dominantColorFromRgba averages the saturated bucket");
 
 	// --- byte-size formatting (v0.7.0 storage display) ---
 
@@ -352,23 +307,23 @@ if (serverRender === undefined) {
 	assert(catalogShortFn("@deepseek-ai/dsh-host-plugin-inventory") === "plugin-inventory", "short name strips dsh-host- prefix");
 	assert(catalogShortFn("dshmarket") === "dshmarket", "plain names pass through");
 
-	// --- markdown node registration gate (ui.markdown) ---
+	// --- markdown node registration gate (ui.enhance) ---
 
 	const mdReg = captured.__dshToolsTest && captured.__dshToolsTest.markdownNodeRegistration;
 	assert(typeof mdReg === "function", "test hook exports markdownNodeRegistration");
 	assert(mdReg(null) === true, "null config registers the shadow optimistically");
 	assert(mdReg({ features: [] }) === true, "unknown feature registers optimistically");
-	assert(mdReg({ features: [{ key: "ui.markdown", enabled: true }] }) === true, "enabled ui.markdown registers the shadow");
-	assert(mdReg({ features: [{ key: "ui.markdown", enabled: false }] }) === false, "disabled ui.markdown unregisters the shadow (stock renderer wins)");
+	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }] }) === true, "enabled ui.enhance registers the shadow");
+	assert(mdReg({ features: [{ key: "ui.enhance", enabled: false }] }) === false, "disabled ui.enhance unregisters the shadow (stock renderer wins)");
 
-	// --- history registration gate + turns model (ui.history) ---
+	// --- history registration gate + turns model (ui.enhance) ---
 
 	const hsReg = captured.__dshToolsTest && captured.__dshToolsTest.historyRegistration;
 	const buildTurnsFn = captured.__dshToolsTest && captured.__dshToolsTest.buildTurns;
 	const mergeTurnsFn = captured.__dshToolsTest && captured.__dshToolsTest.mergeVisibleTurns;
 	assert(typeof hsReg === "function" && typeof buildTurnsFn === "function" && typeof mergeTurnsFn === "function", "test hooks export history helpers");
 	assert(hsReg(null) === true, "null config registers the strip optimistically");
-	assert(hsReg({ features: [{ key: "ui.history", enabled: false }] }) === false, "disabled ui.history unregisters details + pin");
+	assert(hsReg({ features: [{ key: "ui.enhance", enabled: false }] }) === false, "disabled ui.enhance unregisters details + pin");
 
 	const fakeSnapshot = {
 		order: ["k1", "k2", "k3", "k4"],

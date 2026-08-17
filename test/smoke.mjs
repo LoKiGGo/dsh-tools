@@ -96,7 +96,7 @@ assert(apiRoute !== undefined, "framework route /dsh-tools/api registered");
 // --- config snapshot ---
 let r = await call(apiRoute, "POST", "/dsh-tools/api/config", {});
 assert(r.status === 200 && r.body.ok === true, "config returns ok envelope");
-assert(r.body.value.features.length === 11, "config snapshot lists 11 features");
+assert(r.body.value.features.length === 9, "config snapshot lists 9 features");
 assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === true, "notify.task-done defaults on");
 assert(r.body.value.features.find((f) => f.key === "restart.web").enabled === true, "restart.web defaults on");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").enabled === true, "delete-chat defaults on");
@@ -105,20 +105,14 @@ assert(r.body.value.features.find((f) => f.key === "update-plugin").enabled === 
 assert(r.body.value.features.find((f) => f.key === "plugin-catalog").enabled === true, "plugin-catalog defaults on");
 assert(r.body.value.features.find((f) => f.key === "question.collapse").enabled === true, "question.collapse defaults on");
 assert(r.body.value.features.find((f) => f.key === "question.collapse").panel === false, "question.collapse is a non-panel feature");
-assert(r.body.value.features.find((f) => f.key === "ui.markdown").enabled === false, "ui.markdown defaults off (stock look preserved)");
-assert(r.body.value.features.find((f) => f.key === "ui.markdown").panel === false, "ui.markdown joins the 界面增强 tab");
-assert(r.body.value.features.find((f) => f.key === "ui.history").enabled === false, "ui.history defaults off (stock look preserved)");
-assert(r.body.value.features.find((f) => f.key === "ui.history").panel === false, "ui.history joins the 界面增强 tab");
-assert(r.body.value.features.find((f) => f.key === "ui.history").hasConfig === true, "ui.history declares defaultConfig (hasConfig=true)");
-assert(r.body.value.featureConfig["ui.history"].historyPosition === "off" && r.body.value.featureConfig["ui.history"].historyLimit === 10, "ui.history defaultConfig merged into featureConfig");
-r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "ui.history", config: { historyPosition: "left" } });
-assert(r.body.value.featureConfig["ui.history"].historyPosition === "left" && r.body.value.featureConfig["ui.history"].historyLimit === 10, "config/feature overlays defaultConfig without dropping untouched keys");
+assert(r.body.value.features.find((f) => f.key === "ui.enhance").enabled === false, "ui.enhance defaults off (stock look preserved)");
+assert(r.body.value.features.find((f) => f.key === "ui.enhance").panel === true, "ui.enhance is a panel feature (own settings tab)");
+assert(r.body.value.features.find((f) => f.key === "ui.enhance").hasConfig === true, "ui.enhance declares defaultConfig (hasConfig=true)");
+assert(r.body.value.featureConfig["ui.enhance"].historyPosition === "off" && r.body.value.featureConfig["ui.enhance"].historyLimit === 10, "ui.enhance defaultConfig merged into featureConfig");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "ui.enhance", config: { historyPosition: "left" } });
+assert(r.body.value.featureConfig["ui.enhance"].historyPosition === "left" && r.body.value.featureConfig["ui.enhance"].historyLimit === 10, "config/feature overlays defaultConfig without dropping untouched keys");
 assert(r.body.value.features.find((f) => f.key === "ui.usage").enabled === false, "ui.usage defaults off (stock look preserved)");
 assert(r.body.value.features.find((f) => f.key === "ui.usage").panel === true, "ui.usage is a panel feature (own settings tab)");
-assert(r.body.value.features.find((f) => f.key === "ui.appearance").enabled === false, "ui.appearance defaults off (stock look preserved)");
-assert(r.body.value.features.find((f) => f.key === "ui.appearance").panel === true, "ui.appearance is a panel feature (own settings tab)");
-assert(r.body.value.features.find((f) => f.key === "ui.appearance").hasConfig === true, "ui.appearance declares defaultConfig (hasConfig=true)");
-assert(r.body.value.featureConfig["ui.appearance"].accent === "#4176e6" && r.body.value.featureConfig["ui.appearance"].glass === "frosted", "ui.appearance defaultConfig merged (neutral defaults)");
 assert(r.body.value.features.find((f) => f.key === "notify.task-done").alwaysOn === false, "notify.task-done is optional (v0.7.0)");
 assert(r.body.value.features.find((f) => f.key === "restart.web").alwaysOn === true, "restart.web is alwaysOn");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").alwaysOn === false, "delete-chat is optional");
@@ -272,13 +266,14 @@ assert(listed.find((s) => s.id === "session-1").workspace.path === wsA, "session
 assert(listed.find((s) => s.id === "session-2").workspace.id === "ws-b", "second workspace mapped");
 assert(listed.find((s) => s.id === "session-3").workspace.id === "ws-a" && listed.find((s) => s.id === "session-3").workspace.title === "工作区A", "workspace id and title carried");
 assert(listed.find((s) => s.id === "session-4").workspace === null, "sessions outside every workspace carry workspace null");
-// storage sizes (v0.7.0): session dir totals, workspace dir totals, null when unreadable
+// storage sizes (v0.7.1): session dir totals; workspace size = SUM of its
+// sessions' chat records (NOT the workspace directory itself)
 assert(listed.find((s) => s.id === "session-1").sizeBytes === 15, "session size sums the whole directory tree (10+5)");
 assert(listed.find((s) => s.id === "session-2").sizeBytes === 16, "session size is the transcript file size");
 assert(listed.find((s) => s.id === "session-3").sizeBytes === 2048, "larger transcript size reported");
 assert(listed.find((s) => s.id === "session-4").sizeBytes === 4, "tiny session size reported");
-assert(listed.find((s) => s.id === "session-1").workspace.sizeBytes === 100, "workspace size is the workspace directory total");
-assert(listed.find((s) => s.id === "session-2").workspace.sizeBytes === null, "missing workspace directory reports null");
+assert(listed.find((s) => s.id === "session-1").workspace.sizeBytes === 2063, "workspace size = sum of its sessions' chat records (15+2048), not the workspace dir (100)");
+assert(listed.find((s) => s.id === "session-2").workspace.sizeBytes === 16, "workspace size works even when the workspace dir is missing");
 
 // --- delete-chat open-folder: workspace whitelist + launcher spawn (v0.6.1) ---
 

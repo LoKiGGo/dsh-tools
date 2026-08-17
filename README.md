@@ -1,10 +1,10 @@
 # dsh-tools
 
 DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具想法，设置页
-（设置 → **dsh 工具箱**）采用页签式导航：「功能开关」页签顶部为常驻功能
-（一键重启、桌面通知授权，强制开启无开关），下方为可选功能的开关列表；
-每个已启用的可选功能一个页签入口（页签超出宽度时可按住左右拖动查看）；
-开关即时生效并持久化（重启后保留）。
+（设置 → **dsh 工具箱**）采用页签式导航：「功能开关」页签顶部为一键重启
+（常驻，强制开启无开关）与桌面通知授权卡（任务完成提示开启时显示），
+下方为可选功能的开关列表；每个已启用的可选功能一个页签入口（页签超出
+宽度时可按住左右拖动查看）；开关即时生效并持久化（重启后保留）。
 
 > ⚠️ **使用提示**：本插件纯 AI 制作，无人工含量，可能后续不会对其进行维护，请谨慎使用。
 
@@ -12,12 +12,32 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 
 | key | 功能 | 说明 | 默认 |
 | --- | --- | --- | --- |
-| `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话 | 强制开启（无开关） |
+| `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话；开关关闭时不监听、不弹提示 | 开 |
 | `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动刷新页面（开发测试快循环） | 强制开启（无开关） |
-| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话；删除会话页点击工作区路径可打开对应文件夹 | 开 |
+| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话；列表显示每个会话与工作区占用的磁盘空间；删除会话页点击工作区路径可打开对应文件夹 | 开 |
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关；点击插件名可跳转其 GitHub 页（有则显示），行内展示插件功能描述 | 开 |
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:`/URL spec，Releases/tags API 探测）两类安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
+| `question.collapse` | 提问面板折叠 | agent 提问时（ask_user / plan 审批等）可在提问面板 header 内一键折叠为紧凑小条（回答草稿保留），再点展开 | 开 |
+| `ui.markdown` | Markdown 渲染 | 用户消息按 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）；关闭时与原生纯文本外观一致 | 关 |
+| `ui.history` | 浮动历史条 | 会话内容区边缘浮动历史记录条：悬停波浪高亮、点击跳转对应回合，支持「悬挂」（位置 / 数量在「界面增强」页签配置） | 关 |
+| `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数），趋势柱图与会话排行 | 关 |
+| `ui.appearance` | 外观 | 「外观」页签：6 套预设、壁纸、玻璃档位、强调色（可自动从壁纸取色 / 随机灵感）、各表面不透明度、字体与缩放、精细项与自定义 CSS / 变量，改动即时生效 | 关 |
+
+## 融合功能与参考来源
+
+v0.7.0 起融合了三个开源插件的功能（均 MIT 许可，源码文件头与下方条目
+标注来源；融合版默认关闭，开启后行为与上游一致，但配置存 dsh-tools
+自身的 `featureConfig`，设置入口统一在「dsh 工具箱」内）：
+
+| 功能 | 来源 | 许可 |
+| --- | --- | --- |
+| `question.collapse` 提问面板折叠 | [Townrain/dsh-question-panel-collapse](https://github.com/Townrain/dsh-question-panel-collapse) | MIT（Copyright (c) 2026 Townrain） |
+| `ui.markdown` / `ui.history` / `ui.usage` / `ui.appearance` | [yoli-mi/dsh-client-ui-custom](https://github.com/yoli-mi/dsh-client-ui-custom) | MIT（Copyright (c) 2026 Yoli-mi） |
+
+> 说明：ui-custom 的 `shortcuts`（快捷键）与 `marketplace`（插件市场）两个
+> 模块未融合；appearance 的「小窗 / 全屏预览」未移植（保存即生效，可随时
+> 调整回看）。
 
 ## 安装
 
@@ -39,14 +59,18 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 ## 配置
 
 私有 JSON：`<DSH_HOME>/profiles/web/plugins-data/dsh-tools.json`（首次修改
-时自动生成，写入前自动备份 `.bak`）。缺失的 key 一律回落到功能默认值。
+时自动生成，写入前自动备份 `.bak`）。结构为
+`{ "features": { "<key>": true|false }, "featureConfig": { "<key>": {...} } }`：
+缺失的 key 一律回落到功能默认值（带默认配置的功能，其 `featureConfig`
+在读取时自动与模块 `defaultConfig` 合并）。
 
 ## 宿主 API（同源 + 信任围栏，POST 除注明外）
 
 框架路由：
 
-- `POST /dsh-tools/api/config` — 配置快照（全部功能的元数据 + 开关）
+- `POST /dsh-tools/api/config` — 配置快照（全部功能的元数据 + 开关 + featureConfig）
 - `POST /dsh-tools/api/config/set` `{key, enabled}` — 改开关，写盘并热应用
+- `POST /dsh-tools/api/config/feature` `{key, config}` — 写某功能的配置项（与模块默认值合并后写盘；客户端据此实时渲染）
 - `POST /dsh-tools/api/ping` — 健康检查（客户端重启探测用）
 - `POST /dsh-tools/api/restart` — 重启 dsh web（`restart.web` 启用时）
 - `POST /dsh-tools/api/plugin-catalog` — 插件分类投影：loader 条目 + 来源分类（`plugin-catalog` 启用时；分类规则见 `lib/features/plugin-catalog.js`）
@@ -128,9 +152,9 @@ explorer.exe 常驻（交互式桌面的常态）。若重启仍失败，把上�
 ## 测试
 
 ```sh
-node test/smoke.mjs            # 宿主框架：启动/配置热应用/SSE 管线/围栏/方法门控/插件分类路由
+node test/smoke.mjs            # 宿主框架：启动/配置热应用/SSE 管线/围栏/方法门控/featureConfig 路由/插件分类路由
 node test/plugin-catalog-smoke.mjs  # 插件分类：分类判定纯函数（scope/spec/余量桶/投影）
-node test/client-smoke.mjs     # 客户端 bundle：执行/槽位注册/初始渲染/提示判定逻辑
+node test/client-smoke.mjs     # 客户端 bundle：执行/槽位注册/初始渲染/提示判定/标签页模型/用量与外观纯函数
 node test/mutations-smoke.mjs  # profile 文件改写（plugin-toggle / update-plugin，假 profile）
 node test/update-github-smoke.mjs   # GitHub 安装来源：spec 分类/解析/版本探测/检查流程（假 profile）
 node test/restart-launcher-smoke.mjs  # 一键重启启动器（真实生成器文本，无害载荷）

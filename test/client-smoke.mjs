@@ -56,6 +56,23 @@ globalThis.window = {
 					if (React === undefined) throw new Error("react not resolvable in Node test");
 					return React;
 				}
+				if (name === "react-dom") {
+					// 真实浏览器里 react-dom 是 shell-own static module；Node 测试
+					// 中只用到 createPortal 的占位（面板折叠组件 SSR 阶段渲染 null）。
+					return { createPortal: (node) => node };
+				}
+				if (name === "@deepseek-ai/dsh-client-ui-primitives") {
+					// shell 静态表原子组件；Node 测试用桩（Markdown 节点视图不在 SSR 段）。
+					const stub = () => null;
+					return {
+						MarkdownText: stub, MessageText: stub, JsonBlock: stub, Tooltip: stub,
+						IconCopyOutline16: stub, IconCheckOutline16: stub,
+						writeClipboard: async () => true,
+					};
+				}
+				if (name === "@deepseek-ai/dsh-client-ui-attachment") {
+					return { ImageGallery: () => null };
+				}
 				throw new Error("unexpected require: " + name);
 			});
 		},
@@ -108,13 +125,25 @@ const fakeCtx = {
 
 const dispose = captured.apply(fakeCtx);
 assert(typeof dispose === "function", "apply returns a disposer");
-assert(registered.length === 3, "three slot entries registered");
+// settings.section + 2× shell.overlay + 2× conversation.chat.node + details
+// + assistant-actions + settings.plugins.tab
+assert(registered.length === 8, "eight slot entries registered");
 
 const settingsReg = registered.find((r) => r.opts.name === "settings.section");
-const overlayReg = registered.find((r) => r.opts.name === "shell.overlay");
+const overlayReg = registered.find((r) => r.opts.name === "shell.overlay" && r.opts.id === "dsh-tools-notify");
+const collapseReg = registered.find((r) => r.opts.name === "shell.overlay" && r.opts.id === "question-collapse");
+const mdUserReg = registered.find((r) => r.opts.name === "conversation.chat.node" && r.opts.key === "user");
+const mdSteeringReg = registered.find((r) => r.opts.name === "conversation.chat.node" && r.opts.key === "steering");
+const detailsReg = registered.find((r) => r.opts.name === "details");
+const pinReg = registered.find((r) => r.opts.name === "conversation.chat.assistant-actions");
 const catalogReg = registered.find((r) => r.opts.name === "settings.plugins.tab");
 assert(settingsReg !== undefined && settingsReg.opts.id === "dsh-tools" && settingsReg.opts.order === 35, "settings.section id dsh-tools order 35");
 assert(overlayReg !== undefined && overlayReg.opts.id === "dsh-tools-notify", "shell.overlay id dsh-tools-notify");
+assert(collapseReg !== undefined && collapseReg.opts.id === "question-collapse" && collapseReg.opts.order === 90, "shell.overlay question-collapse entry id question-collapse order 90");
+assert(mdUserReg !== undefined && mdUserReg.opts.priority === -1 && mdUserReg.opts.locale === "conversation", "conversation.chat.node user shadow registered with priority -1");
+assert(mdSteeringReg !== undefined && mdSteeringReg.opts.key === "steering" && mdSteeringReg.opts.priority === -1, "conversation.chat.node steering shadow registered with priority -1");
+assert(detailsReg !== undefined && detailsReg.opts.priority === -1 && typeof detailsReg.opts.inject === "function", "details entry registered with priority -1 and an inject face");
+assert(pinReg !== undefined && pinReg.opts.id === "dsh-tools-pin" && pinReg.opts.order === 5, "assistant-actions pin entry id dsh-tools-pin order 5");
 assert(catalogReg !== undefined && catalogReg.opts.id === "plugin-catalog" && catalogReg.opts.order === 20 && catalogReg.opts.label === "插件分类", "settings.plugins.tab entry id plugin-catalog order 20");
 
 // --- initial render paths (needs react + react-dom/server) ---
@@ -140,6 +169,11 @@ if (serverRender === undefined) {
 	assert(overlayElement !== null, "overlay render returns an element (null allowed only after mount logic)");
 	const overlayHtml = serverRender(overlayElement);
 	assert(overlayHtml === "", "overlay renders empty before any toasts");
+
+	const collapseElement = collapseReg.render({});
+	assert(collapseElement !== null, "question-collapse render returns an element");
+	const collapseHtml = serverRender(collapseElement);
+	assert(collapseHtml === "", "question-collapse renders empty before a question panel is observed");
 
 	const catalogElement = catalogReg.render({});
 	assert(catalogElement !== null, "catalog tab render returns an element");
@@ -196,8 +230,7 @@ if (serverRender === undefined) {
 	// --- settings tab model (pure function) ---
 
 	const tabsOf = captured.__dshToolsTest && captured.__dshToolsTest.tabModel;
-	assert(typeof tabsOf === "function", "test hook exports tabModel");
-	let tabs = tabsOf(null);
+	assert(typeof tabsOf === "function", "test hook exports tabModel");	let tabs = tabsOf(null);
 	assert(tabs.length === 1 && tabs[0].key === "manage" && tabs[0].label === "功能开关", "null config yields only the manage tab");
 	tabs = tabsOf({
 		features: [
@@ -209,12 +242,12 @@ if (serverRender === undefined) {
 	assert(tabs.length === 3 && tabs[0].key === "manage" && tabs[1].key === "a" && tabs[2].key === "c", "enabled features become tabs in order, disabled ones excluded");
 	tabs = tabsOf({
 		features: [
-			{ key: "notify.task-done", label: "任务完成提示", enabled: true, alwaysOn: true },
+			{ key: "notify.task-done", label: "任务完成提示", enabled: true, alwaysOn: false, panel: false },
 			{ key: "restart.web", label: "一键重启", enabled: true, alwaysOn: true },
 			{ key: "a", label: "功能A", enabled: true },
 		],
 	});
-	assert(tabs.length === 2 && tabs[0].key === "manage" && tabs[1].key === "a", "alwaysOn features get no tab of their own");
+	assert(tabs.length === 2 && tabs[0].key === "manage" && tabs[1].key === "a", "alwaysOn features get no tab; panel:false optional features (notify.task-done) get no tab either");
 	tabs = tabsOf({
 		features: [
 			{ key: "a", label: "功能A", enabled: true },
@@ -223,6 +256,87 @@ if (serverRender === undefined) {
 		],
 	});
 	assert(tabs.length === 3 && tabs[1].key === "a" && tabs[2].key === "b", "panel:false features get no settings tab; panel:true (and unset) are included");
+	tabs = tabsOf({
+		features: [
+			{ key: "ui.history", label: "浮动历史条", enabled: true, panel: false },
+			{ key: "ui.markdown", label: "Markdown 渲染", enabled: false, panel: false },
+			{ key: "a", label: "功能A", enabled: true },
+		],
+	});
+	assert(tabs.length === 3 && tabs[1].key === "a" && tabs[2].key === "ui-enhance", "enabled ui.history adds the merged 界面增强 tab");
+	tabs = tabsOf({
+		features: [
+			{ key: "ui.history", label: "浮动历史条", enabled: false, panel: false },
+			{ key: "ui.markdown", label: "Markdown 渲染", enabled: true, panel: false },
+		],
+	});
+	assert(tabs.length === 2 && tabs[1].key === "ui-enhance", "enabled ui.markdown alone also adds the merged tab");
+	tabs = tabsOf({
+		features: [
+			{ key: "ui.history", label: "浮动历史条", enabled: false, panel: false },
+			{ key: "ui.markdown", label: "Markdown 渲染", enabled: false, panel: false },
+		],
+	});
+	assert(tabs.length === 1, "both enhancers disabled → no 界面增强 tab");
+	tabs = tabsOf({
+		features: [
+			{ key: "ui.usage", label: "应用用量", enabled: true, panel: true },
+			{ key: "a", label: "功能A", enabled: false },
+		],
+	});
+	assert(tabs.length === 2 && tabs[1].key === "ui.usage", "enabled panel feature ui.usage gets its own tab");
+	tabs = tabsOf({
+		features: [
+			{ key: "ui.appearance", label: "外观", enabled: true, panel: true },
+		],
+	});
+	assert(tabs.length === 2 && tabs[1].key === "ui.appearance", "enabled panel feature ui.appearance gets its own tab");
+
+	// --- appearance pipeline pure functions (ui.appearance) ---
+
+	const normalizeFn = captured.__dshToolsTest && captured.__dshToolsTest.normalizeConfig;
+	const resolvePresetFn = captured.__dshToolsTest && captured.__dshToolsTest.resolvePreset;
+	const harmonyFn = captured.__dshToolsTest && captured.__dshToolsTest.harmonySwatches;
+	const dominantFn = captured.__dshToolsTest && captured.__dshToolsTest.dominantColorFromRgba;
+	const randomFn = captured.__dshToolsTest && captured.__dshToolsTest.randomInspirationConfig;
+	assert(typeof normalizeFn === "function" && typeof resolvePresetFn === "function" && typeof harmonyFn === "function" && typeof dominantFn === "function" && typeof randomFn === "function", "test hooks export appearance helpers");
+
+	const neutral = normalizeFn(undefined, undefined);
+	assert(neutral.wallpaper === "" && neutral.accent === "#4176e6" && neutral.surfaceOpacity === 100 && neutral.glass === "frosted", "normalizeConfig yields neutral defaults from nothing");
+	const clamped = normalizeFn({ surfaceOpacity: 250, wallpaperBlur: 999, fontScale: 3, glass: "nope", customVars: { "--a": 3, "--b": {} } }, undefined);
+	assert(clamped.surfaceOpacity === 100 && clamped.wallpaperBlur === 60 && clamped.fontScale === 1.1 && clamped.glass === "frosted", "normalizeConfig clamps out-of-range values");
+	assert(clamped.customVars["--a"] === "3" && clamped.customVars["--b"] === undefined, "customVars coerces scalars only");
+	const presetCfg = resolvePresetFn("ink-teal");
+	assert(presetCfg !== undefined && presetCfg.accent === "#1e8f7e", "resolvePreset finds the ink-teal preset");
+	assert(resolvePresetFn("") === undefined && resolvePresetFn("nope") === undefined, "resolvePreset rejects unknown ids");
+	const withPreset = normalizeFn({ accent: "#ff0000" }, presetCfg);
+	assert(withPreset.accent === "#ff0000" && withPreset.surfaceOpacity === 40, "explicit config wins over the preset, preset fills the rest");
+	const swatches = harmonyFn("#4176e6");
+	assert(swatches.length === 7 && swatches[0] === "#4176e6", "harmonySwatches yields base-first swatches");
+	assert(harmonyFn("not-a-color").length === 0, "harmonySwatches rejects invalid hex");
+	let calls = 0;
+	const rng = () => { calls += 1; return 0.5; };
+	const idea = randomFn(rng);
+	assert(typeof idea.accent === "string" && idea.accent.startsWith("#") && idea.wallpaper === "", "randomInspirationConfig yields a full partial config");
+	assert(calls > 0, "injectable RNG is actually used");
+	const pixels = new Uint8ClampedArray([65, 118, 230, 255, 255, 255, 255, 255]);
+	assert(dominantFn(pixels) === "#4176e6", "dominantColorFromRgba averages the saturated bucket");
+
+	// --- byte-size formatting (v0.7.0 storage display) ---
+
+	const formatBytesFn = captured.__dshToolsTest && captured.__dshToolsTest.formatBytes;
+	assert(typeof formatBytesFn === "function", "test hook exports formatBytes");
+	assert(formatBytesFn(0) === "0 B", "zero bytes formats as B");
+	assert(formatBytesFn(1023) === "1023 B", "bytes under 1 KiB stay in B");
+	assert(formatBytesFn(1024) === "1.0 KB", "1 KiB is 1.0 KB");
+	assert(formatBytesFn(1536) === "1.5 KB", "fractional KiB formats with one decimal");
+	assert(formatBytesFn(1500 * 1024) === "1.5 MB", "MB rounding");
+	assert(formatBytesFn(50 * 1024 * 1024) === "50.0 MB", "MB under 100 keeps one decimal");
+	assert(formatBytesFn(200 * 1024 * 1024) === "200 MB", "values >= 100 round to integer");
+	assert(formatBytesFn(3 * 1024 * 1024 * 1024) === "3.0 GB", "GB scale");
+	assert(formatBytesFn(null) === "未知" && formatBytesFn(undefined) === "未知", "unknown sizes render 未知");
+	assert(formatBytesFn(-5) === "未知", "negative sizes render 未知");
+	assert(formatBytesFn("12") === "未知", "non-number sizes render 未知");
 
 	// --- plugin-catalog pure helpers ---
 
@@ -237,6 +351,116 @@ if (serverRender === undefined) {
 	assert(catalogShortFn("@deepseek-ai/dsh-base") === "base", "short name strips the official scope and dsh- prefix (same rule as the official page)");
 	assert(catalogShortFn("@deepseek-ai/dsh-host-plugin-inventory") === "plugin-inventory", "short name strips dsh-host- prefix");
 	assert(catalogShortFn("dshmarket") === "dshmarket", "plain names pass through");
+
+	// --- markdown node registration gate (ui.markdown) ---
+
+	const mdReg = captured.__dshToolsTest && captured.__dshToolsTest.markdownNodeRegistration;
+	assert(typeof mdReg === "function", "test hook exports markdownNodeRegistration");
+	assert(mdReg(null) === true, "null config registers the shadow optimistically");
+	assert(mdReg({ features: [] }) === true, "unknown feature registers optimistically");
+	assert(mdReg({ features: [{ key: "ui.markdown", enabled: true }] }) === true, "enabled ui.markdown registers the shadow");
+	assert(mdReg({ features: [{ key: "ui.markdown", enabled: false }] }) === false, "disabled ui.markdown unregisters the shadow (stock renderer wins)");
+
+	// --- history registration gate + turns model (ui.history) ---
+
+	const hsReg = captured.__dshToolsTest && captured.__dshToolsTest.historyRegistration;
+	const buildTurnsFn = captured.__dshToolsTest && captured.__dshToolsTest.buildTurns;
+	const mergeTurnsFn = captured.__dshToolsTest && captured.__dshToolsTest.mergeVisibleTurns;
+	assert(typeof hsReg === "function" && typeof buildTurnsFn === "function" && typeof mergeTurnsFn === "function", "test hooks export history helpers");
+	assert(hsReg(null) === true, "null config registers the strip optimistically");
+	assert(hsReg({ features: [{ key: "ui.history", enabled: false }] }) === false, "disabled ui.history unregisters details + pin");
+
+	const fakeSnapshot = {
+		order: ["k1", "k2", "k3", "k4"],
+		nodes: {
+			get: (key) => {
+				const rows = {
+					k1: { kind: "user", data: { content: [{ type: "text", text: "第一回合问题" }] }, location: { kind: "turn", turn: { turn: 1 } } },
+					k2: { kind: "assistant", data: { blocks: [{ kind: "text", text: "助手回答" }] }, location: { kind: "step", turn: { turn: 1 } } },
+					k3: { kind: "steering", data: { content: [{ type: "text", text: "steering 提示" }] }, location: { kind: "turn", turn: { turn: 2 } } },
+					k4: { kind: "user", data: { content: [{ type: "image" }] }, location: { kind: "turn", turn: { turn: 3 } } },
+				};
+				return rows[key];
+			},
+		},
+		legacy: { turnTimings: { get: (n) => (n === 1 ? { startTime: 1000 } : undefined) } },
+	};
+	const turns = buildTurnsFn(fakeSnapshot);
+	assert(turns.length === 3, "buildTurns keeps only user/steering nodes");
+	assert(turns[0].key === "k1" && turns[0].turn === 1 && turns[0].question === "第一回合问题" && turns[0].time === 1000, "turn carries key/turn/question/time");
+	assert(turns[1].key === "k3" && turns[1].turn === 2, "steering nodes become turns");
+	assert(turns[2].question === "" && turns[2].time === undefined, "textless turn yields empty preview and no timing");
+	const merged = mergeTurnsFn(turns, 1, new Set([2]));
+	assert(merged.length === 2 && merged[0].key === "k3" && merged[1].key === "k4", "limit keeps the recent turn and merges pinned back in window order");
+	const mergedAll = mergeTurnsFn(turns, 0, new Set());
+	assert(mergedAll.length === 3, "zero limit shows all turns");
+	const mergedPinned = mergeTurnsFn(turns, 1, new Set([99]));
+	assert(mergedPinned.length === 1 && mergedPinned[0].key === "k4", "absent pinned numbers are ignored (recent turn kept)");
+
+	// --- usage aggregation pure functions (ui.usage) ---
+
+	const decodeRow = captured.__dshToolsTest && captured.__dshToolsTest.decodeUsageRow;
+	const aggregateFn = captured.__dshToolsTest && captured.__dshToolsTest.aggregateUsage;
+	const bucketFn = captured.__dshToolsTest && captured.__dshToolsTest.usageByBucket;
+	const modelKeysFn = captured.__dshToolsTest && captured.__dshToolsTest.usageModelKeys;
+	const fmtTokens = captured.__dshToolsTest && captured.__dshToolsTest.formatTokens;
+	const fmtDuration = captured.__dshToolsTest && captured.__dshToolsTest.formatDuration;
+	assert(typeof decodeRow === "function" && typeof aggregateFn === "function" && typeof bucketFn === "function" && typeof modelKeysFn === "function" && typeof fmtTokens === "function" && typeof fmtDuration === "function", "test hooks export usage helpers");
+
+	const NOW = Date.now();
+	const ROW = decodeRow(NOW, {
+		tokenUsage: {
+			uncachedInputTokens: 100, outputTokens: 50, cacheReadTokens: 30, cacheWriteTokens: 20,
+			byModel: { "deepseek:chat": { uncachedInputTokens: 60, outputTokens: 30, cacheReadTokens: 10, cacheWriteTokens: 5 } },
+		},
+		sessionStats: { turns: 3, steps: 7, llmMs: 120000, toolMs: 4000 },
+	});
+	assert(ROW.usage !== null && ROW.usage.uncachedInputTokens === 100, "decodeUsageRow reads the tokenUsage projection");
+	assert(ROW.byModel !== null && ROW.byModel["deepseek:chat"].outputTokens === 30, "decodeUsageRow reads per-model buckets");
+	assert(ROW.stats !== null && ROW.stats.turns === 3 && ROW.stats.llmMs === 120000, "decodeUsageRow reads sessionStats");
+	const lenient = decodeRow(NOW, undefined);
+	assert(lenient.usage === null && lenient.byModel === null && lenient.stats === null, "missing projection decodes leniently");
+	assert(modelKeysFn([ROW])[0] === "deepseek:chat", "usageModelKeys collects provider:model keys");
+	const agg = aggregateFn([ROW], "week", NOW, null);
+	assert(agg.sessions === 1 && agg.inputTokens === 100 && agg.outputTokens === 50 && agg.cacheReadTokens === 30 && agg.steps === 7 && agg.llmMs === 120000, "aggregateUsage sums the row in window");
+	const aggOld = aggregateFn([ROW], "days3", NOW + 10 * 86400000, null);
+	assert(aggOld.sessions === 0, "aggregateUsage drops rows outside the window");
+	const aggModel = aggregateFn([ROW], "week", NOW, "deepseek:chat");
+	assert(aggModel.inputTokens === 60 && aggModel.cacheReadTokens === 10, "model filter aggregates the model bucket only");
+	const aggMissing = aggregateFn([ROW], "week", NOW, "other:model");
+	assert(aggMissing.sessions === 0, "model filter skips sessions that never used the model");
+	const buckets = bucketFn([ROW], "week", NOW, null);
+	assert(buckets.length === 7 && buckets.some((b) => b.tokens > 0), "usageByBucket yields 7 daily buckets with the row inside");
+	const yearBuckets = bucketFn([ROW], "year", NOW, null);
+	assert(yearBuckets.length === 12, "year range yields 12 monthly buckets");
+	assert(fmtTokens(1200) === "1.2k" && fmtTokens(3400000) === "3.40M" && fmtTokens(999) === "999", "formatTokens compacts k/M");
+	assert(fmtDuration(45000) === "45s" && fmtDuration(750000) === "12m 30s" && fmtDuration(3.2 * 3600000) === "3h 12m", "formatDuration compacts durations");
+
+	// --- usage panel data path (Bug 1 regression: useSessions must flow from
+	// the settings.section runtime prop, NOT ctx.sessions.list which is a
+	// SnapshotStore object and never callable as a hook) ---
+
+	const UsagePanelCmp = captured.__dshToolsTest && captured.__dshToolsTest.UsagePanel;
+	assert(typeof UsagePanelCmp === "function", "test hook exports UsagePanel");
+	if (serverRender !== undefined) {
+		const usageEmptyHtml = serverRender(React.createElement(UsagePanelCmp, { useSessions: undefined }));
+		assert(usageEmptyHtml.includes("暂无用量数据"), "usage panel without a sessions hook renders the empty state (no crash)");
+		const usageFakeHook = (selector) => selector({
+			byId: {
+				"s1": {
+					displayTitle: "用量测试会话",
+					updatedAt: Date.now(),
+					projectionValues: {
+						tokenUsage: { uncachedInputTokens: 1000, outputTokens: 500, cacheReadTokens: 200, cacheWriteTokens: 100 },
+						sessionStats: { turns: 2, steps: 5, llmMs: 60000, toolMs: 3000 },
+					},
+				},
+			},
+		});
+		const usageDataHtml = serverRender(React.createElement(UsagePanelCmp, { useSessions: usageFakeHook }));
+		assert(usageDataHtml.includes("用量测试会话"), "usage panel renders session data when useSessions flows through the prop");
+		assert(usageDataHtml.includes("1.0k"), "usage panel renders formatted token KPIs from projection data");
+	}
 	assert(catalogShortFn("cordis:server") === "server", "short name strips cordis: builtins");
 
 	const sampleEntries = [

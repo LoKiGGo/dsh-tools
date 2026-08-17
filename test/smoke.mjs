@@ -16,7 +16,7 @@
  * Run:  node test/smoke.mjs
  */
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -96,19 +96,48 @@ assert(apiRoute !== undefined, "framework route /dsh-tools/api registered");
 // --- config snapshot ---
 let r = await call(apiRoute, "POST", "/dsh-tools/api/config", {});
 assert(r.status === 200 && r.body.ok === true, "config returns ok envelope");
-assert(r.body.value.features.length === 6, "config snapshot lists 6 features");
+assert(r.body.value.features.length === 11, "config snapshot lists 11 features");
 assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === true, "notify.task-done defaults on");
 assert(r.body.value.features.find((f) => f.key === "restart.web").enabled === true, "restart.web defaults on");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").enabled === true, "delete-chat defaults on");
 assert(r.body.value.features.find((f) => f.key === "plugin-toggle").enabled === true, "plugin-toggle defaults on");
 assert(r.body.value.features.find((f) => f.key === "update-plugin").enabled === true, "update-plugin defaults on");
 assert(r.body.value.features.find((f) => f.key === "plugin-catalog").enabled === true, "plugin-catalog defaults on");
-assert(r.body.value.features.find((f) => f.key === "notify.task-done").alwaysOn === true, "notify.task-done is alwaysOn");
+assert(r.body.value.features.find((f) => f.key === "question.collapse").enabled === true, "question.collapse defaults on");
+assert(r.body.value.features.find((f) => f.key === "question.collapse").panel === false, "question.collapse is a non-panel feature");
+assert(r.body.value.features.find((f) => f.key === "ui.markdown").enabled === false, "ui.markdown defaults off (stock look preserved)");
+assert(r.body.value.features.find((f) => f.key === "ui.markdown").panel === false, "ui.markdown joins the 界面增强 tab");
+assert(r.body.value.features.find((f) => f.key === "ui.history").enabled === false, "ui.history defaults off (stock look preserved)");
+assert(r.body.value.features.find((f) => f.key === "ui.history").panel === false, "ui.history joins the 界面增强 tab");
+assert(r.body.value.features.find((f) => f.key === "ui.history").hasConfig === true, "ui.history declares defaultConfig (hasConfig=true)");
+assert(r.body.value.featureConfig["ui.history"].historyPosition === "off" && r.body.value.featureConfig["ui.history"].historyLimit === 10, "ui.history defaultConfig merged into featureConfig");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "ui.history", config: { historyPosition: "left" } });
+assert(r.body.value.featureConfig["ui.history"].historyPosition === "left" && r.body.value.featureConfig["ui.history"].historyLimit === 10, "config/feature overlays defaultConfig without dropping untouched keys");
+assert(r.body.value.features.find((f) => f.key === "ui.usage").enabled === false, "ui.usage defaults off (stock look preserved)");
+assert(r.body.value.features.find((f) => f.key === "ui.usage").panel === true, "ui.usage is a panel feature (own settings tab)");
+assert(r.body.value.features.find((f) => f.key === "ui.appearance").enabled === false, "ui.appearance defaults off (stock look preserved)");
+assert(r.body.value.features.find((f) => f.key === "ui.appearance").panel === true, "ui.appearance is a panel feature (own settings tab)");
+assert(r.body.value.features.find((f) => f.key === "ui.appearance").hasConfig === true, "ui.appearance declares defaultConfig (hasConfig=true)");
+assert(r.body.value.featureConfig["ui.appearance"].accent === "#4176e6" && r.body.value.featureConfig["ui.appearance"].glass === "frosted", "ui.appearance defaultConfig merged (neutral defaults)");
+assert(r.body.value.features.find((f) => f.key === "notify.task-done").alwaysOn === false, "notify.task-done is optional (v0.7.0)");
 assert(r.body.value.features.find((f) => f.key === "restart.web").alwaysOn === true, "restart.web is alwaysOn");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").alwaysOn === false, "delete-chat is optional");
 assert(r.body.value.features.find((f) => f.key === "plugin-catalog").alwaysOn === false, "plugin-catalog is optional");
 assert(r.body.value.features.find((f) => f.key === "plugin-catalog").panel === false, "plugin-catalog is a non-panel feature");
+assert(r.body.value.features.find((f) => f.key === "notify.task-done").panel === false, "notify.task-done is a non-panel feature (no empty settings tab)");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").panel === true, "panel features default panel=true");
+
+// --- per-feature config (方案A, v0.7.0) ---
+assert(r.body.value.featureConfig !== undefined && typeof r.body.value.featureConfig === "object", "snapshot carries featureConfig");
+assert(r.body.value.features.find((f) => f.key === "delete-chat").hasConfig === false, "features without defaultConfig report hasConfig=false");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "delete-chat", config: { showSizes: true } });
+assert(r.status === 200 && r.body.value.featureConfig["delete-chat"].showSizes === true, "config/feature writes per-feature config");
+const storedCfg = JSON.parse(readFileSync(join(tmp, "profiles", "web", "plugins-data", "dsh-tools.json"), "utf8"));
+assert(storedCfg.featureConfig !== undefined && storedCfg.featureConfig["delete-chat"].showSizes === true, "featureConfig persisted to disk");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "delete-chat", config: { showSizes: false } });
+assert(r.body.value.featureConfig["delete-chat"].showSizes === false, "config/feature overwrites a key");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "no-such-feature", config: { a: 1 } });
+assert(r.status === 500, "config/feature rejects unknown feature keys");
 
 // --- SSE + notify pipeline (agent/status → filter → broadcast → stream) ---
 
@@ -128,13 +157,20 @@ const beforeLength = sseRes.body.length;
 agentStatusListeners[0]({ status: "running", agent: { id: "session-abc" } });
 assert(sseRes.body.length === beforeLength, "running status is not broadcast");
 
-// --- alwaysOn forcing: disable requests are ignored, pipeline stays live ---
+// --- notify.task-done is now toggleable (v0.7.0): disable disposes the
+// agent/status listener and closes the SSE hub; re-enable restores both ---
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "notify.task-done", enabled: false });
-assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === true, "notify.task-done cannot be disabled (alwaysOn)");
-assert((listeners.get("agent/status") ?? []).length === 1, "agent/status listener survives the disable attempt");
-const sseForcedRes = fakeRes();
-await apiRoute.handler(fakeReq("GET", "/dsh-tools/api/events", {}), sseForcedRes);
-assert(sseForcedRes.status === 200, "GET events still streams after the disable attempt");
+assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === false, "notify.task-done can be disabled");
+assert((listeners.get("agent/status") ?? []).length === 0, "agent/status listener disposed after disable");
+const sseDisabledRes = fakeRes();
+await apiRoute.handler(fakeReq("GET", "/dsh-tools/api/events", {}), sseDisabledRes);
+assert(sseDisabledRes.status === 404 && JSON.parse(sseDisabledRes.body).ok === false, "GET events rejected while notify.task-done is off");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "notify.task-done", enabled: true });
+assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === true, "notify.task-done can be re-enabled");
+assert((listeners.get("agent/status") ?? []).length === 1, "agent/status listener re-registered after re-enable");
+const sseAgainRes = fakeRes();
+await apiRoute.handler(fakeReq("GET", "/dsh-tools/api/events", {}), sseAgainRes);
+assert(sseAgainRes.status === 200, "GET events streams again after re-enable");
 
 // --- isRootAgent: id-based comparison survives instance churn ---
 const { isRootAgent } = await import("../lib/features/notify-task-done.js");
@@ -171,9 +207,25 @@ const dcRoutes = routes.filter((x) => x.path === "/dsh-tools/delete-chat/api");
 assert(dcRoutes.length === 2, "delete-chat route re-registered after toggle cycle");
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-chat", enabled: false });
 
-// --- delete-chat list: workspace grouping metadata (fake services) ---
+// --- delete-chat list: workspace grouping + storage sizes (fake services,
+// real temp directories for dirSize) ---
 
 const spawns = [];
+// Real directories under tmp so dirSize can compute real byte counts.
+const sessionsRoot = join(tmp, "sessions");
+mkdirSync(join(sessionsRoot, "session-1", "sub"), { recursive: true });
+writeFileSync(join(sessionsRoot, "session-1", "session.jsonl"), "1234567890"); // 10 B
+writeFileSync(join(sessionsRoot, "session-1", "sub", "extra.bin"), "abcde"); // +5 B
+mkdirSync(join(sessionsRoot, "session-2"), { recursive: true });
+writeFileSync(join(sessionsRoot, "session-2", "session.jsonl"), "0123456789ABCDEF"); // 16 B
+mkdirSync(join(sessionsRoot, "session-3"), { recursive: true });
+writeFileSync(join(sessionsRoot, "session-3", "session.jsonl"), "x".repeat(2048)); // 2048 B
+mkdirSync(join(sessionsRoot, "session-4"), { recursive: true });
+writeFileSync(join(sessionsRoot, "session-4", "session.jsonl"), "yyyy"); // 4 B
+const wsA = join(tmp, "ws-a");
+mkdirSync(wsA, { recursive: true });
+writeFileSync(join(wsA, "payload.bin"), "p".repeat(100)); // 100 B
+const wsB = join(tmp, "ws-b-missing"); // never created → dirSize null
 fakeCtx.get = (name) => {
 	if (name === "sessionQuery") {
 		return {
@@ -186,12 +238,17 @@ fakeCtx.get = (name) => {
 			readTitleSnapshots: async (ids) => ids.map((sessionId) => ({ sessionId, status: "fulfilled", value: { title: { title: "标题-" + sessionId } } })),
 		};
 	}
+	if (name === "sessionPersistence") {
+		return {
+			locate: (header) => ({ kind: "jsonl", path: join(sessionsRoot, header.id, "session.jsonl") }),
+		};
+	}
 	if (name === "workspaceRegistry") {
 		return {
 			archivedSessionIds: [],
 			list: () => [
-				{ id: "ws-a", path: "C:\\work\\a", title: "工作区A", sessionIds: ["session-1", "session-3"] },
-				{ id: "ws-b", path: "D:\\repo\\b", title: "工作区B", sessionIds: ["session-2"] },
+				{ id: "ws-a", path: wsA, title: "工作区A", sessionIds: ["session-1", "session-3"] },
+				{ id: "ws-b", path: wsB, title: "工作区B", sessionIds: ["session-2"] },
 			],
 		};
 	}
@@ -211,18 +268,25 @@ r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/list", {});
 assert(r.status === 200 && r.body.ok === true, "delete-chat list succeeds with services present");
 const listed = r.body.value;
 assert(listed.length === 4, "list returns all sessions");
-assert(listed.find((s) => s.id === "session-1").workspace.path === "C:\\work\\a", "session workspace resolved from workspaceRegistry");
+assert(listed.find((s) => s.id === "session-1").workspace.path === wsA, "session workspace resolved from workspaceRegistry");
 assert(listed.find((s) => s.id === "session-2").workspace.id === "ws-b", "second workspace mapped");
 assert(listed.find((s) => s.id === "session-3").workspace.id === "ws-a" && listed.find((s) => s.id === "session-3").workspace.title === "工作区A", "workspace id and title carried");
 assert(listed.find((s) => s.id === "session-4").workspace === null, "sessions outside every workspace carry workspace null");
+// storage sizes (v0.7.0): session dir totals, workspace dir totals, null when unreadable
+assert(listed.find((s) => s.id === "session-1").sizeBytes === 15, "session size sums the whole directory tree (10+5)");
+assert(listed.find((s) => s.id === "session-2").sizeBytes === 16, "session size is the transcript file size");
+assert(listed.find((s) => s.id === "session-3").sizeBytes === 2048, "larger transcript size reported");
+assert(listed.find((s) => s.id === "session-4").sizeBytes === 4, "tiny session size reported");
+assert(listed.find((s) => s.id === "session-1").workspace.sizeBytes === 100, "workspace size is the workspace directory total");
+assert(listed.find((s) => s.id === "session-2").workspace.sizeBytes === null, "missing workspace directory reports null");
 
 // --- delete-chat open-folder: workspace whitelist + launcher spawn (v0.6.1) ---
 
-r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "C:\\work\\a" });
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: wsA });
 assert(r.status === 200 && r.body.ok === true && r.body.value.ok === true, "open-folder opens a known workspace");
 const scriptFile = join(tmp, "profiles", "web", "plugins-data", "dsh-tools-open-folder.ps1");
 assert(existsSync(scriptFile), "open-folder launcher script written");
-assert(spawns.length === 1 && spawns[0].argv[0] === "powershell.exe" && spawns[0].argv.includes("-File") && spawns[0].argv.includes(scriptFile) && spawns[0].argv[spawns[0].argv.length - 1] === "C:\\work\\a", "powershell launcher spawned with the workspace path");
+assert(spawns.length === 1 && spawns[0].argv[0] === "powershell.exe" && spawns[0].argv.includes("-File") && spawns[0].argv.includes(scriptFile) && spawns[0].argv[spawns[0].argv.length - 1] === wsA, "powershell launcher spawned with the workspace path");
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "C:\\evil" });
 assert(r.status === 200 && r.body.ok === true && r.body.value.ok === false && r.body.value.error === "not-a-workspace", "non-workspace path rejected");
 assert(spawns.length === 1, "rejected path never spawns the launcher");

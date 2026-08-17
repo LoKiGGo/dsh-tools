@@ -162,7 +162,7 @@ if (serverRender === undefined) {
 	assert(html.includes("功能开关"), "manage tab always present");
 	assert(html.includes("正在读取配置"), "loading state rendered before config arrives");
 	assert(html.includes("一键重启"), "always-on restart card renders inside 功能开关 before config loads");
-	assert(html.includes("桌面通知权限"), "always-on notification card renders inside 功能开关 before config loads");
+	assert(html.includes("任务完成提示"), "任务完成提示 card renders inside 功能开关 before config loads (授权+开关合一, v0.7.2)");
 	assert(!html.includes("会话管理"), "optional-feature rows hidden until config loads");
 
 	const overlayElement = overlayReg.render({ useSessions: fakeUseSessions });

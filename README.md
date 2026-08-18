@@ -78,6 +78,51 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 > 注意：同一微信账号同时只能有一个轮询网关；如果该账号已被 OpenClaw /
 > hermes-agent 等其他程序占用，启动会因实例互斥失败。
 
+### 微信媒体能力
+
+- **图片 / 视频 / 文件收发**：不需要外接模型。微信图片/文件会下载到
+  `~/.openclaw/weixin-dsh/media/`，Agent 回复中写 `[image:路径]` /
+  `[video:路径]` / `[file:路径]` 即可发送。
+- **语音转文字（ASR）**：需要 OpenAI 兼容 ASR 接口，配置
+  `AI_ASR_BASE_URL` / `AI_ASR_KEY` / `AI_ASR_MODEL`（默认 `SenseVoiceSmall`），
+  或全局 `AI_GATEWAY_BASE_URL` / `AI_GATEWAY_KEY`。
+- **图像理解（Vision）**：需要 OpenAI 兼容视觉接口，配置
+  `AI_VISION_BASE_URL` / `AI_VISION_KEY` / `AI_VISION_MODEL`（默认 `qwen2.5-vl`）。
+  未配置时，如果已安装 `@liustack/modlens`，微信图片会自动提示 Agent 使用
+  `modlens_read_image` 读取。
+- **文生图（Image）**：需要 OpenAI 兼容图像生成接口，配置
+  `AI_IMAGE_BASE_URL` / `AI_IMAGE_KEY` / `AI_IMAGE_MODEL`（默认 `gpt-image-2`）。
+  配置后 dsh-tools 会注册 `generate_image` 工具，Agent 可以主动画图并发给微信。
+- 以上 AI 凭据统一从环境变量或 `~/.openclaw/weixin-dsh/.env` 读取（权限 0600）。
+- 「微信接入」页签的 **AI 能力** 下拉框内：
+  - 显示当前 AI 能力配置状态；
+  - 提供 Base URL / API Key / Model 表单，可直接保存到 `~/.openclaw/weixin-dsh/.env`；
+  - 内置示例配置说明。
+- 页签还提供媒体缓存路径列表与「清理聊天文件缓存」按钮。
+
+示例 `~/.openclaw/weixin-dsh/.env`：
+
+```bash
+AI_ASR_BASE_URL=https://your-gateway/v1
+AI_ASR_KEY=sk-xxx
+AI_ASR_MODEL=SenseVoiceSmall
+
+AI_VISION_BASE_URL=https://your-gateway/v1
+AI_VISION_KEY=sk-xxx
+AI_VISION_MODEL=qwen2.5-vl
+
+AI_IMAGE_BASE_URL=https://your-gateway/v1
+AI_IMAGE_KEY=sk-xxx
+AI_IMAGE_MODEL=gpt-image-2
+```
+
+也可以只配一组全局：
+
+```bash
+AI_GATEWAY_BASE_URL=https://your-gateway/v1
+AI_GATEWAY_KEY=sk-xxx
+```
+
 ## 宿主 API（同源 + 信任围栏，POST 除注明外）
 
 框架路由：
@@ -96,7 +141,7 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 - `POST /dsh-tools/delete-chat/api/{list,delete}`
 - `POST /dsh-tools/plugin-toggle/api/{list,set}`
 - `POST /dsh-tools/update-plugin/api/{check,update,uninstall}`
-- `POST /dsh-tools/wechat.openclaw/api/{status,login/start,login/poll,login/verify,login/cancel,gateway/start,gateway/stop,account/logout}`
+- `POST /dsh-tools/wechat.openclaw/api/{status,login/start,login/poll,login/verify,login/cancel,gateway/start,gateway/stop,account/logout,media/list,media/clean,media/open,ai/config}`
 
 SSE 消息格式：`data: {"type":"turn-done","data":{"sessionId":"..."}}`。
 

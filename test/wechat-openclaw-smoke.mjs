@@ -10,9 +10,12 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { normalizeAllowFrom, isAllowed } from "../lib/wechat/allowlist.js";
 import { createLoginSession, submitVerifyCode, cancelLogin, loginSnapshot } from "../lib/wechat/login.js";
-import { runWeixinGateway } from "../lib/wechat/gateway.js";
+import { runWeixinGateway, shouldUseModlensFallback } from "../lib/wechat/gateway.js";
 import * as feature from "../lib/features/wechat-openclaw.js";
 
 // --- allowlist ---
@@ -22,6 +25,13 @@ assert.equal(isAllowed(["wxid_1"], "wxid_1"), true);
 assert.equal(isAllowed(["wxid_1"], " wxid_1 "), true);
 assert.equal(isAllowed(["wxid_1"], "wxid_2"), false);
 assert.equal(isAllowed(["wxid_1"], ""), false);
+
+// --- modlens fallback decision ---
+assert.equal(shouldUseModlensFallback(true, ["modlens_read_image"]), false);
+assert.equal(shouldUseModlensFallback(false, ["modlens_read_image"]), true);
+assert.equal(shouldUseModlensFallback(false, ["bash"]), false);
+assert.equal(shouldUseModlensFallback(false, []), false);
+assert.equal(shouldUseModlensFallback(false, null), false);
 
 // --- login session primitives ---
 const session = createLoginSession();
@@ -107,6 +117,35 @@ await wechatRoute.handler(
 assert.equal(logoutRes.body.ok, true);
 assert.equal(logoutRes.body.value.ok, false);
 assert.equal(logoutRes.body.value.error, "missing-account");
+
+// media/list returns cached files under the configured state dir.
+const mediaTmp = mkdtempSync(join(tmpdir(), "dsh-wx-media-"));
+const mediaDir = join(mediaTmp, "weixin-dsh", "media");
+mkdirSync(mediaDir, { recursive: true });
+writeFileSync(join(mediaDir, "a.png"), "x");
+const oldState = process.env.OPENCLAW_STATE_DIR;
+process.env.OPENCLAW_STATE_DIR = mediaTmp;
+const mediaRes = {};
+lastPayload = {};
+await wechatRoute.handler(
+	{ method: "POST", url: "/dsh-tools/wechat.openclaw/api/media/list", headers: { host: "127.0.0.1:3080" } },
+	mediaRes,
+);
+assert.equal(mediaRes.body.ok, true);
+assert.equal(Array.isArray(mediaRes.body.value), true);
+assert.equal(mediaRes.body.value.some((f) => f.name === "a.png"), true);
+process.env.OPENCLAW_STATE_DIR = oldState;
+
+// ai/config with missing capabilities is handled (not unknown method).
+const aiRes = {};
+lastPayload = {};
+await wechatRoute.handler(
+	{ method: "POST", url: "/dsh-tools/wechat.openclaw/api/ai/config", headers: { host: "127.0.0.1:3080" } },
+	aiRes,
+);
+assert.equal(aiRes.body.ok, true);
+assert.equal(aiRes.body.value.ok, false);
+assert.equal(aiRes.body.value.error, "bad-request");
 disposer();
 
 console.log("wechat-openclaw-smoke: PASS");

@@ -21,6 +21,7 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
 | `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置） | 关 |
 | `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数），趋势柱图与会话排行 | 关 |
+| `wechat.openclaw` | 微信接入（OpenClaw） | 扫码绑定个人微信，通过腾讯 openclaw-weixin / iLink 协议与 DSH Agent 文字聊天；支持白名单、room / per-user 会话模式、网关启停 | 关 |
 
 ## 融合功能与参考来源
 
@@ -60,6 +61,23 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 缺失的 key 一律回落到功能默认值（带默认配置的功能，其 `featureConfig`
 在读取时自动与模块 `defaultConfig` 合并）。
 
+## 微信接入（OpenClaw）
+
+`wechat.openclaw` 是可选功能（默认关），启用后会在「dsh 工具箱」出现
+「微信接入」页签：
+
+- 扫码登录个人微信（复用腾讯 openclaw-weixin / iLink 协议层）。
+- 微信文字消息会进入 DSH Agent 会话，Agent 的回复会发回微信。
+- 白名单为空时也可以启动网关（**仅记录模式**），所有消息会被拦截并在
+  「最近发送者 ID」中记录；配置白名单（每行一个微信 ID）后重启网关即可放行。
+- 会话模式：`room`（所有微信用户共享一个 DSH 会话）或 `per-user`
+  （每个微信用户独立会话）。
+- 微信凭据保存在用户主目录的 `~/.openclaw/openclaw-weixin/accounts/`，
+  聊天记录仍由 DSH 会话持久化保存，不写入 dsh-tools 配置。
+
+> 注意：同一微信账号同时只能有一个轮询网关；如果该账号已被 OpenClaw /
+> hermes-agent 等其他程序占用，启动会因实例互斥失败。
+
 ## 宿主 API（同源 + 信任围栏，POST 除注明外）
 
 框架路由：
@@ -78,6 +96,7 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 - `POST /dsh-tools/delete-chat/api/{list,delete}`
 - `POST /dsh-tools/plugin-toggle/api/{list,set}`
 - `POST /dsh-tools/update-plugin/api/{check,update,uninstall}`
+- `POST /dsh-tools/wechat.openclaw/api/{status,login/start,login/poll,login/verify,login/cancel,gateway/start,gateway/stop,account/logout}`
 
 SSE 消息格式：`data: {"type":"turn-done","data":{"sessionId":"..."}}`。
 
@@ -157,6 +176,7 @@ node test/update-github-smoke.mjs   # GitHub 安装来源：spec 分类/解析/�
 node test/restart-launcher-smoke.mjs  # 一键重启启动器（真实生成器文本，无害载荷）
 node test/explorer-dispatch-smoke.mjs # explorer 分发链（cmd→隐藏 powershell）
 node test/restart-sequence-smoke.mjs  # 真实 restart 方法：响应+自退出（一次性牺牲进程）
+node test/wechat-openclaw-smoke.mjs  # 微信接入：白名单/登录状态机/feature 元数据（不连真实微信）
 ```
 
 八个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`

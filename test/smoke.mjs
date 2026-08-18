@@ -96,7 +96,7 @@ assert(apiRoute !== undefined, "framework route /dsh-tools/api registered");
 // --- config snapshot ---
 let r = await call(apiRoute, "POST", "/dsh-tools/api/config", {});
 assert(r.status === 200 && r.body.ok === true, "config returns ok envelope");
-assert(r.body.value.features.length === 9, "config snapshot lists 9 features");
+assert(r.body.value.features.length === 10, "config snapshot lists 10 features");
 assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === true, "notify.task-done defaults on");
 assert(r.body.value.features.find((f) => f.key === "restart.web").enabled === true, "restart.web defaults on");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").enabled === true, "delete-chat defaults on");
@@ -303,6 +303,41 @@ assert(r.status === 200 && r.body.ok === true && r.body.value.ok === false && r.
 assert(spawns.length === 1, "rejected path never spawns the launcher");
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: "" });
 assert(r.body.value.ok === false && r.body.value.error === "bad-request", "empty path rejected");
+
+// --- delete-chat: WeChat-like session id (directory name is not `session-` prefixed) ---
+
+const wxDir = join(sessionsRoot, "__room__");
+mkdirSync(wxDir, { recursive: true });
+writeFileSync(join(wxDir, "session.jsonl"), "wechat-transcript");
+const originalGet = fakeCtx.get;
+fakeCtx.get = (name) => {
+	if (name === "sessionQuery") {
+		return {
+			listSessions: async () => [{ header: { id: "__room__", createdAt: 9999 }, live: false, persisted: true }],
+			readTitleSnapshots: async (ids) => ids.map((sessionId) => ({ sessionId, status: "fulfilled", value: { title: { title: "微信会话" } } })),
+		};
+	}
+	if (name === "sessionPersistence") {
+		return { locate: (header) => ({ kind: "jsonl", path: join(sessionsRoot, header.id, "session.jsonl") }) };
+	}
+	if (name === "workspaceRegistry") return { archivedSessionIds: [], list: () => [] };
+	if (name === "subprocess") {
+		return {
+			resolveExecutable: async (requested) => requested,
+			spawn: (spec) => {
+				spawns.push(spec);
+				return { done: Promise.resolve({ exitCode: 0 }), collected: {} };
+			},
+		};
+	}
+	if (name === "sandboxPolicy") return { workspaceRoot: "C:\\" };
+	return undefined;
+};
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/delete", { sessionId: "__room__", confirmLive: false });
+assert(r.status === 200 && r.body.ok === true && r.body.value.ok === true, "delete WeChat-like session succeeds");
+const rmSpawn = spawns[spawns.length - 1];
+assert(rmSpawn.argv.some((a) => typeof a === "string" && a.includes("Remove-Item") && a.includes("__room__")), "delete targets the WeChat session dir");
+fakeCtx.get = originalGet;
 
 // --- plugin-catalog: classification API (real route, fake manifest + loader) ---
 

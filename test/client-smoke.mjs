@@ -270,6 +270,13 @@ if (serverRender === undefined) {
 		],
 	});
 	assert(tabs.length === 2 && tabs[1].key === "ui.usage", "enabled panel feature ui.usage gets its own tab");
+	tabs = tabsOf({
+		features: [
+			{ key: "wechat.openclaw", label: "微信接入（OpenClaw）", enabled: true, panel: true },
+			{ key: "a", label: "功能A", enabled: false },
+		],
+	});
+	assert(tabs.length === 2 && tabs[1].key === "wechat.openclaw", "enabled panel feature wechat.openclaw gets its own tab");
 
 	// --- byte-size formatting (v0.7.0 storage display) ---
 

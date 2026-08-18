@@ -39,7 +39,8 @@ assert(classifySpec("https://github.com/someone/dsh-skill-viewer/archive/refs/ta
 assert(classifySpec("link:E:/x") === "skip", "link: spec skipped");
 assert(classifySpec("file:../x") === "skip", "file: spec skipped");
 assert(classifySpec("workspace:*") === "skip", "workspace: spec skipped");
-assert(classifySpec("git+https://github.com/u/r.git") === "skip", "git+ spec skipped");
+assert(classifySpec("git+https://github.com/u/r.git") === "github", "git+https github spec classified as github");
+assert(classifySpec("git+https://example.com/u/r.git") === "skip", "non-github git+https spec skipped");
 assert(classifySpec("https://example.com/x.tgz") === "skip", "non-github URL skipped");
 
 const ref1 = parseGitHubSpec("github:someone/dsh-skill-viewer");
@@ -50,6 +51,10 @@ const ref3 = parseGitHubSpec("https://github.com/someone/dsh-skill-viewer/releas
 assert(ref3 !== null && ref3.owner === "someone" && ref3.repo === "dsh-skill-viewer" && ref3.tag === "v0.3.1", "release download URL parsed with tag");
 const ref4 = parseGitHubSpec("https://github.com/someone/dsh-skill-viewer");
 assert(ref4 !== null && ref4.tag === undefined, "bare repo URL parsed without tag");
+const ref5 = parseGitHubSpec("git+https://github.com/someone/dsh-skill-viewer.git");
+assert(ref5 !== null && ref5.owner === "someone" && ref5.repo === "dsh-skill-viewer" && ref5.tag === undefined, "git+https github spec parsed");
+const ref6 = parseGitHubSpec("git+https://github.com/someone/dsh-skill-viewer.git#v0.3.1");
+assert(ref6 !== null && ref6.tag === "v0.3.1", "git+https github spec parsed with #tag");
 assert(parseGitHubSpec("link:E:/x") === null, "non-github spec returns null");
 
 assert(versionFromTag("v0.3.1") === "0.3.1", "versionFromTag strips v prefix");
@@ -58,6 +63,7 @@ assert(versionFromTag("0.3.1") === "0.3.1", "versionFromTag passes plain version
 
 assert(buildUpdateSpec("github:someone/dsh-skill-viewer", "v0.3.1") === "github:someone/dsh-skill-viewer#v0.3.1", "github: spec pins #tag");
 assert(buildUpdateSpec("https://github.com/someone/dsh-skill-viewer/releases/download/v0.2.2/x.tgz", "v0.3.1") === "https://github.com/someone/dsh-skill-viewer/archive/refs/tags/v0.3.1.tar.gz", "URL spec becomes archive tarball");
+assert(buildUpdateSpec("git+https://github.com/someone/dsh-skill-viewer.git", "v0.3.1") === "git+https://github.com/someone/dsh-skill-viewer.git#v0.3.1", "git+https github spec pins #tag");
 
 // --- githubLatestTag against a stubbed fetch ---
 
@@ -99,12 +105,14 @@ globalThis.fetch = realFetch;
 const profileDir = join(tmp, "profiles", "web");
 mkdirSync(join(profileDir, "node_modules", "dsh-skill-viewer"), { recursive: true });
 mkdirSync(join(profileDir, "node_modules", "dsh-link-dep"), { recursive: true });
+mkdirSync(join(profileDir, "node_modules", "dsh-git-dep"), { recursive: true });
 writeFileSync(join(profileDir, "package.json"), JSON.stringify({
 	name: "dsh-profile-web",
 	private: true,
 	dependencies: {
 		"dsh-skill-viewer": "github:someone/dsh-skill-viewer",
-		"dsh-link-dep": "link:E:/somewhere"
+		"dsh-link-dep": "link:E:/somewhere",
+		"dsh-git-dep": "git+https://github.com/someone/dsh-git-dep.git"
 	}
 }, null, 2));
 writeFileSync(join(profileDir, "node_modules", "dsh-skill-viewer", "package.json"), JSON.stringify({
@@ -114,6 +122,10 @@ writeFileSync(join(profileDir, "node_modules", "dsh-skill-viewer", "package.json
 writeFileSync(join(profileDir, "node_modules", "dsh-link-dep", "package.json"), JSON.stringify({
 	name: "dsh-link-dep",
 	version: "0.0.1"
+}, null, 2));
+writeFileSync(join(profileDir, "node_modules", "dsh-git-dep", "package.json"), JSON.stringify({
+	name: "dsh-git-dep",
+	version: "0.1.0"
 }, null, 2));
 
 globalThis.fetch = async (url) => {
@@ -171,6 +183,9 @@ assert(gh.latest === "0.3.1", "latest from GitHub release tag");
 assert(gh.outdated === true, "0.2.2 < 0.3.1 → outdated");
 const linkDep = result.value.plugins.find((p) => p.name === "dsh-link-dep");
 assert(linkDep !== undefined && linkDep.skip === true, "link: dep still skipped");
+const gitDep = result.value.plugins.find((p) => p.name === "dsh-git-dep");
+assert(gitDep !== undefined && gitDep.skip === false && gitDep.kind === "github", "git+https github dep not skipped");
+assert(gitDep.latest === "0.3.1", "git+https github dep gets latest from GitHub");
 
 // error path: GitHub API down → error text, not a crash
 globalThis.fetch = async () => { throw new Error("ECONNREFUSED"); };

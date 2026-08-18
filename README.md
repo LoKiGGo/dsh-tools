@@ -1,7 +1,7 @@
 # dsh-tools
 
 DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具想法，设置页
-（设置 → **dsh 工具箱**）采用页签式导航：「功能开关」页签顶部为一键重启
+（设置 → **dsh 工具箱**）采用页签式导航：「功能开关」页签顶部为 DeepSeek Harness 版本检查、一键重启
 （常驻，强制开启无开关）与「任务完成提示」卡片（授权与开关合一：未授权时显示授权按钮，授权完成后在卡片内展示启用/停用开关），
 下方为可选功能的开关列表；每个已启用的可选功能一个页签入口（页签超出
 宽度时可按住左右拖动查看）；开关即时生效并持久化（重启后保留）。
@@ -13,12 +13,12 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | key | 功能 | 说明 | 默认 |
 | --- | --- | --- | --- |
 | `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话；开关关闭时不监听、不弹提示 | 开 |
+| `harness.check` | DeepSeek Harness 版本检查 | 「功能开关」页签顶部卡片：检查 DeepSeek Harness 当前版本与 GitHub 最新 Release/tag，仅检查不升级；每次 dsh web 启动后仅首次打开时自动检查，之后手动点「重新检查」 | 强制开启（无开关） |
 | `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动刷新页面（开发测试快循环） | 强制开启（无开关） |
 | `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话；列表显示每个会话与工作区占用的磁盘空间；删除会话页点击工作区路径可打开对应文件夹 | 开 |
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关；点击插件名可跳转其 GitHub 页（有则显示），行内展示插件功能描述 | 开 |
-| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:`/URL spec，Releases/tags API 探测）两类安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
+| `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:` / `git+https://github.com/...` / URL spec，Releases/tags API 探测）安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
-| `question.collapse` | 提问面板折叠 | agent 提问时（ask_user / plan 审批等）可在提问面板 header 内一键折叠为紧凑小条（回答草稿保留），再点展开 | 开 |
 | `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置） | 关 |
 | `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数），趋势柱图与会话排行 | 关 |
 
@@ -30,7 +30,6 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 
 | 功能 | 来源 | 许可 |
 | --- | --- | --- |
-| `question.collapse` 提问面板折叠 | [Townrain/dsh-question-panel-collapse](https://github.com/Townrain/dsh-question-panel-collapse) | MIT（Copyright (c) 2026 Townrain） |
 | `ui.enhance`（Markdown 渲染 + 浮动历史条）/ `ui.usage` | [yoli-mi/dsh-client-ui-custom](https://github.com/yoli-mi/dsh-client-ui-custom) | MIT（Copyright (c) 2026 Yoli-mi） |
 
 > 说明：ui-custom 的 `appearance`（外观）、`shortcuts`（快捷键）与
@@ -70,6 +69,7 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 - `POST /dsh-tools/api/config/feature` `{key, config}` — 写某功能的配置项（与模块默认值合并后写盘；客户端据此实时渲染）
 - `POST /dsh-tools/api/ping` — 健康检查（客户端重启探测用）
 - `POST /dsh-tools/api/restart` — 重启 dsh web（`restart.web` 启用时）
+- `POST /dsh-tools/api/harness-check` — DeepSeek Harness 版本检查（`harness.check` 启用时；仅检查，不升级）
 - `POST /dsh-tools/api/plugin-catalog` — 插件分类投影：loader 条目 + 来源分类（`plugin-catalog` 启用时；分类规则见 `lib/features/plugin-catalog.js`）
 - `GET  /dsh-tools/api/events` — SSE 推送（`notify.task-done` 启用时）
 

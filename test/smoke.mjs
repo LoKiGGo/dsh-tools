@@ -103,8 +103,9 @@ assert(r.body.value.features.find((f) => f.key === "delete-chat").enabled === tr
 assert(r.body.value.features.find((f) => f.key === "plugin-toggle").enabled === true, "plugin-toggle defaults on");
 assert(r.body.value.features.find((f) => f.key === "update-plugin").enabled === true, "update-plugin defaults on");
 assert(r.body.value.features.find((f) => f.key === "plugin-catalog").enabled === true, "plugin-catalog defaults on");
-assert(r.body.value.features.find((f) => f.key === "question.collapse").enabled === true, "question.collapse defaults on");
-assert(r.body.value.features.find((f) => f.key === "question.collapse").panel === false, "question.collapse is a non-panel feature");
+assert(r.body.value.features.find((f) => f.key === "harness.check").enabled === true, "harness.check defaults on");
+assert(r.body.value.features.find((f) => f.key === "harness.check").alwaysOn === true, "harness.check is alwaysOn");
+assert(r.body.value.features.find((f) => f.key === "harness.check").panel === false, "harness.check is a non-panel feature");
 assert(r.body.value.features.find((f) => f.key === "ui.enhance").enabled === false, "ui.enhance defaults off (stock look preserved)");
 assert(r.body.value.features.find((f) => f.key === "ui.enhance").panel === true, "ui.enhance is a panel feature (own settings tab)");
 assert(r.body.value.features.find((f) => f.key === "ui.enhance").hasConfig === true, "ui.enhance declares defaultConfig (hasConfig=true)");
@@ -181,6 +182,21 @@ assert(isRootAgent({ roots: () => rootsA }, undefined) === false, "missing agent
 // --- alwaysOn forcing for the restart feature (never invoked here) ---
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "restart.web", enabled: false });
 assert(r.body.value.features.find((f) => f.key === "restart.web").enabled === true, "restart.web cannot be disabled (alwaysOn)");
+
+// --- harness-check route (stub fetch + test version override; no real network) ---
+const savedHarnessFetch = globalThis.fetch;
+const savedHarnessEnv = process.env.DSH_TOOLS_HARNESS_VERSION;
+process.env.DSH_TOOLS_HARNESS_VERSION = "0.1.0-rc.7";
+globalThis.fetch = async (url) => {
+	const path = new URL(String(url)).pathname;
+	if (path.endsWith("/releases/latest")) return { ok: true, status: 200, json: async () => ({ tag_name: "v0.1.0-rc.8" }) };
+	return { ok: false, status: 404, json: async () => ({}) };
+};
+r = await call(apiRoute, "POST", "/dsh-tools/api/harness-check", {});
+assert(r.status === 200 && r.body.ok === true && r.body.value.current === "0.1.0-rc.7" && r.body.value.latest === "0.1.0-rc.8" && r.body.value.outdated === true, "harness-check route returns current/latest/outdated");
+globalThis.fetch = savedHarnessFetch;
+if (savedHarnessEnv === undefined) delete process.env.DSH_TOOLS_HARNESS_VERSION;
+else process.env.DSH_TOOLS_HARNESS_VERSION = savedHarnessEnv;
 
 // --- toggle hot-apply: delete-chat on → route registered ---
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-chat", enabled: true });

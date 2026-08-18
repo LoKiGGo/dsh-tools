@@ -125,13 +125,12 @@ const fakeCtx = {
 
 const dispose = captured.apply(fakeCtx);
 assert(typeof dispose === "function", "apply returns a disposer");
-// settings.section + 2× shell.overlay + 2× conversation.chat.node + details
+// settings.section + shell.overlay + 2× conversation.chat.node + details
 // + assistant-actions + settings.plugins.tab
-assert(registered.length === 8, "eight slot entries registered");
+assert(registered.length === 7, "seven slot entries registered");
 
 const settingsReg = registered.find((r) => r.opts.name === "settings.section");
 const overlayReg = registered.find((r) => r.opts.name === "shell.overlay" && r.opts.id === "dsh-tools-notify");
-const collapseReg = registered.find((r) => r.opts.name === "shell.overlay" && r.opts.id === "question-collapse");
 const mdUserReg = registered.find((r) => r.opts.name === "conversation.chat.node" && r.opts.key === "user");
 const mdSteeringReg = registered.find((r) => r.opts.name === "conversation.chat.node" && r.opts.key === "steering");
 const detailsReg = registered.find((r) => r.opts.name === "details");
@@ -139,7 +138,6 @@ const pinReg = registered.find((r) => r.opts.name === "conversation.chat.assista
 const catalogReg = registered.find((r) => r.opts.name === "settings.plugins.tab");
 assert(settingsReg !== undefined && settingsReg.opts.id === "dsh-tools" && settingsReg.opts.order === 35, "settings.section id dsh-tools order 35");
 assert(overlayReg !== undefined && overlayReg.opts.id === "dsh-tools-notify", "shell.overlay id dsh-tools-notify");
-assert(collapseReg !== undefined && collapseReg.opts.id === "question-collapse" && collapseReg.opts.order === 90, "shell.overlay question-collapse entry id question-collapse order 90");
 assert(mdUserReg !== undefined && mdUserReg.opts.priority === -1 && mdUserReg.opts.locale === "conversation", "conversation.chat.node user shadow registered with priority -1");
 assert(mdSteeringReg !== undefined && mdSteeringReg.opts.key === "steering" && mdSteeringReg.opts.priority === -1, "conversation.chat.node steering shadow registered with priority -1");
 assert(detailsReg !== undefined && detailsReg.opts.priority === -1 && typeof detailsReg.opts.inject === "function", "details entry registered with priority -1 and an inject face");
@@ -161,6 +159,7 @@ if (serverRender === undefined) {
 	assert(html.includes("dsh 工具箱"), "settings heading present in rendered html");
 	assert(html.includes("功能开关"), "manage tab always present");
 	assert(html.includes("正在读取配置"), "loading state rendered before config arrives");
+	assert(html.includes("DeepSeek Harness 版本"), "harness version card renders inside 功能开关 before config loads");
 	assert(html.includes("一键重启"), "always-on restart card renders inside 功能开关 before config loads");
 	assert(html.includes("任务完成提示"), "任务完成提示 card renders inside 功能开关 before config loads (授权+开关合一, v0.7.2)");
 	assert(!html.includes("会话管理"), "optional-feature rows hidden until config loads");
@@ -169,11 +168,6 @@ if (serverRender === undefined) {
 	assert(overlayElement !== null, "overlay render returns an element (null allowed only after mount logic)");
 	const overlayHtml = serverRender(overlayElement);
 	assert(overlayHtml === "", "overlay renders empty before any toasts");
-
-	const collapseElement = collapseReg.render({});
-	assert(collapseElement !== null, "question-collapse render returns an element");
-	const collapseHtml = serverRender(collapseElement);
-	assert(collapseHtml === "", "question-collapse renders empty before a question panel is observed");
 
 	const catalogElement = catalogReg.render({});
 	assert(catalogElement !== null, "catalog tab render returns an element");
@@ -450,6 +444,15 @@ if (serverRender === undefined) {
 	assert(decideCheck({ autoChecked: true, inFlight: true, data: null }) === "wait", "an in-flight check is not duplicated");
 	// 空/未初始化 store → 视为首次打开
 	assert(decideCheck(undefined) === "check" && decideCheck(null) === "check", "missing store falls back to checking");
+
+	// --- DeepSeek Harness 版本检查 auto-check decision (pure function) ---
+
+	const decideHarness = captured.__dshToolsTest && captured.__dshToolsTest.harnessCheckDecision;
+	assert(typeof decideHarness === "function", "test hook exports harnessCheckDecision");
+	assert(decideHarness({ autoChecked: false, inFlight: false, data: null }) === "check", "first open after page load runs the harness check");
+	assert(decideHarness({ autoChecked: true, inFlight: false, data: { current: "0.1.0-rc.7", latest: "" } }) === "restore", "later opens restore the cached harness result without a request");
+	assert(decideHarness({ autoChecked: true, inFlight: true, data: null }) === "wait", "an in-flight harness check is not duplicated");
+	assert(decideHarness(undefined) === "check" && decideHarness(null) === "check", "missing harness store falls back to checking");
 
 	// --- 会话管理 load decision (pure function) ---
 

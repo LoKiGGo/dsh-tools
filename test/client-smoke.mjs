@@ -361,7 +361,13 @@ if (serverRender === undefined) {
 	const modelKeysFn = captured.__dshToolsTest && captured.__dshToolsTest.usageModelKeys;
 	const fmtTokens = captured.__dshToolsTest && captured.__dshToolsTest.formatTokens;
 	const fmtDuration = captured.__dshToolsTest && captured.__dshToolsTest.formatDuration;
-	assert(typeof decodeRow === "function" && typeof aggregateFn === "function" && typeof bucketFn === "function" && typeof modelKeysFn === "function" && typeof fmtTokens === "function" && typeof fmtDuration === "function", "test hooks export usage helpers");
+	const rangeWindowFn = captured.__dshToolsTest && captured.__dshToolsTest.rangeWindow;
+	const hitRateFn = captured.__dshToolsTest && captured.__dshToolsTest.usageHitRate;
+	const costFn = captured.__dshToolsTest && captured.__dshToolsTest.estimateUsageCost;
+	const sessionMetricsFn = captured.__dshToolsTest && captured.__dshToolsTest.sessionUsageMetrics;
+	const fmtPrice = captured.__dshToolsTest && captured.__dshToolsTest.formatPrice;
+	const fmtBucketTooltip = captured.__dshToolsTest && captured.__dshToolsTest.formatBucketTooltip;
+	assert(typeof decodeRow === "function" && typeof aggregateFn === "function" && typeof bucketFn === "function" && typeof modelKeysFn === "function" && typeof fmtTokens === "function" && typeof fmtDuration === "function" && typeof rangeWindowFn === "function" && typeof hitRateFn === "function" && typeof costFn === "function" && typeof sessionMetricsFn === "function" && typeof fmtPrice === "function" && typeof fmtBucketTooltip === "function", "test hooks export usage helpers");
 
 	const NOW = Date.now();
 	const ROW = decodeRow(NOW, {
@@ -387,10 +393,68 @@ if (serverRender === undefined) {
 	assert(aggMissing.sessions === 0, "model filter skips sessions that never used the model");
 	const buckets = bucketFn([ROW], "week", NOW, null);
 	assert(buckets.length === 7 && buckets.some((b) => b.tokens > 0), "usageByBucket yields 7 daily buckets with the row inside");
+	const lastBucket = buckets[buckets.length - 1];
+	assert(lastBucket.sessions === 1 && lastBucket.inputTokens === 100 && lastBucket.cacheReadTokens === 30 && Math.abs(lastBucket.hitRate - 30 / 130) < 1e-12, "usageByBucket enriches buckets with breakdown and hit rate");
+	const weekWin = rangeWindowFn("week", NOW);
+	assert(weekWin.end - weekWin.start === 7 * 86400000 - 1, "week window is calendar-aligned across 7 days");
+	const weekTooltipFirst = fmtBucketTooltip(lastBucket).split("\n")[0];
+	assert(!weekTooltipFirst.includes(" - "), "week daily bucket tooltip is a single calendar day");
 	const yearBuckets = bucketFn([ROW], "year", NOW, null);
-	assert(yearBuckets.length === 12, "year range yields 12 monthly buckets");
+	assert(yearBuckets.length === new Date(NOW).getMonth() + 1, "year range yields calendar months up to the current month");
+	const monthBuckets = bucketFn([ROW], "month", NOW, null);
+	assert(monthBuckets.length >= 1 && monthBuckets.length <= 5, "month range yields weekly buckets from month start");
 	assert(fmtTokens(1200) === "1.2k" && fmtTokens(3400000) === "3.40M" && fmtTokens(999) === "999", "formatTokens compacts k/M");
 	assert(fmtDuration(45000) === "45s" && fmtDuration(750000) === "12m 30s" && fmtDuration(3.2 * 3600000) === "3h 12m", "formatDuration compacts durations");
+
+	const CUSTOM = { mode: "custom", start: "2026-01-01", end: "2026-01-03" };
+	const customWin = rangeWindowFn(CUSTOM, NOW);
+	assert(customWin.start === new Date(2026, 0, 1).getTime() && customWin.end === new Date(2026, 0, 3).getTime() + 86400000 - 1, "rangeWindow builds an absolute custom day window");
+	const customRow = Object.assign({}, ROW, { updatedAt: new Date(2026, 0, 2).getTime() });
+	const customBuckets = bucketFn([customRow], CUSTOM, NOW, null);
+	assert(customBuckets.length === 3 && customBuckets[1].sessions === 1 && customBuckets[1].tokens === 200, "custom range buckets by day and carry session data");
+	const aggCustom = aggregateFn([customRow], CUSTOM, NOW, null);
+	assert(aggCustom.sessions === 1 && aggCustom.inputTokens === 100, "aggregateUsage honors custom date windows");
+
+	const PRICING_CFG = {
+		pricing: {
+			"deepseek:chat": { input: 2, cacheRead: 0.5, cacheWrite: 2, output: 8 },
+			default: { input: 1, cacheRead: 0.2, cacheWrite: 1, output: 4 },
+		},
+		priceMode: "offPeak",
+	};
+	assert(hitRateFn(ROW.usage) === 30 / 130, "usageHitRate computes cache read over total input");
+	const cost = costFn(ROW, "deepseek:chat", PRICING_CFG);
+	assert(cost !== null && Math.abs(cost - 0.000375) < 1e-12, "estimateUsageCost prices a model bucket in yuan");
+	const metrics = sessionMetricsFn(ROW, null, PRICING_CFG);
+	assert(metrics.tokens === 200 && Math.abs(metrics.hitRate - 30 / 130) < 1e-12 && Math.abs(metrics.cost - 0.000375) < 1e-12, "sessionUsageMetrics returns tokens, hit rate and cost");
+	const noModelRow = decodeRow(NOW, { tokenUsage: { uncachedInputTokens: 1000, outputTokens: 500, cacheReadTokens: 200, cacheWriteTokens: 100 } });
+	const defaultCost = costFn(noModelRow, null, PRICING_CFG);
+	assert(defaultCost !== null && defaultCost > 0, "estimateUsageCost falls back to default pricing when byModel is absent");
+	const legacyCfg = { pricing: { "deepseek:chat": { input: 2, cacheRead: 0.5, cacheWrite: 2, output: 8 } }, priceMode: "offPeak" };
+	const legacyCost = costFn(noModelRow, null, legacyCfg);
+	assert(legacyCost !== null && legacyCost > 0, "estimateUsageCost injects default fallback for legacy pricing configs");
+	const multiModelRow = decodeRow(NOW, {
+		tokenUsage: {
+			uncachedInputTokens: 1000, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0,
+			byModel: {
+				"deepseek:flash": { uncachedInputTokens: 600, outputTokens: 60, cacheReadTokens: 0, cacheWriteTokens: 0 },
+				"deepseek:pro": { uncachedInputTokens: 400, outputTokens: 40, cacheReadTokens: 0, cacheWriteTokens: 0 },
+			},
+		},
+	});
+	const multiCfg = {
+		pricing: {
+			"deepseek:flash": { input: 1, cacheRead: 0, cacheWrite: 0, output: 2 },
+			"deepseek:pro": { input: 3, cacheRead: 0, cacheWrite: 0, output: 4 },
+		},
+		priceMode: "offPeak",
+	};
+	const multiCost = costFn(multiModelRow, null, multiCfg);
+	const multiExpected = (600 * 1 + 60 * 2 + 400 * 3 + 40 * 4) / 1000000;
+	assert(multiCost !== null && Math.abs(multiCost - multiExpected) < 1e-12, "estimateUsageCost sums per-model prices");
+	assert(fmtPrice(0.000375) === "¥0.0004" && fmtPrice(null) === "—" && fmtPrice(0) === "¥0.00", "formatPrice formats yuan estimates");
+	const tooltip = fmtBucketTooltip(lastBucket);
+	assert(tooltip.includes("总 Token") && tooltip.includes("命中率") && tooltip.includes("会话数") && tooltip.includes("费用") && !tooltip.includes("缓存写"), "formatBucketTooltip includes detailed bucket data and cost, omits cache write");
 
 	// --- usage panel data path (Bug 1 regression: useSessions must flow from
 	// the settings.section runtime prop, NOT ctx.sessions.list which is a
@@ -400,7 +464,7 @@ if (serverRender === undefined) {
 	assert(typeof UsagePanelCmp === "function", "test hook exports UsagePanel");
 	if (serverRender !== undefined) {
 		const usageEmptyHtml = serverRender(React.createElement(UsagePanelCmp, { useSessions: undefined }));
-		assert(usageEmptyHtml.includes("暂无用量数据"), "usage panel without a sessions hook renders the empty state (no crash)");
+		assert(usageEmptyHtml.includes("正在加载用量数据") || usageEmptyHtml.includes("暂无用量数据"), "usage panel without a sessions hook renders loading/empty state (no crash)");
 		const usageFakeHook = (selector) => selector({
 			byId: {
 				"s1": {
@@ -416,6 +480,10 @@ if (serverRender === undefined) {
 		const usageDataHtml = serverRender(React.createElement(UsagePanelCmp, { useSessions: usageFakeHook }));
 		assert(usageDataHtml.includes("用量测试会话"), "usage panel renders session data when useSessions flows through the prop");
 		assert(usageDataHtml.includes("1.0k"), "usage panel renders formatted token KPIs from projection data");
+		assert(usageDataHtml.includes("自定义"), "usage panel shows the custom date tab");
+		assert(usageDataHtml.includes("费用"), "usage panel shows the estimated cost KPI");
+		assert(usageDataHtml.includes("命中率"), "usage panel shows hit rate in the session table");
+		assert(usageDataHtml.includes("价格配置"), "usage panel shows the price config entry");
 	}
 	assert(catalogShortFn("cordis:server") === "server", "short name strips cordis: builtins");
 

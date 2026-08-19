@@ -20,7 +20,7 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:` / `git+https://github.com/...` / URL spec，Releases/tags API 探测）安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
 | `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置） | 关 |
-| `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数），趋势柱图与会话排行 | 关 |
+| `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天 / 自定义日期）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数）；趋势柱图优先读取会话日志按自然日统计真实 usage（磁盘缓存 + 增量扫描），悬停显示具体数据，会话用量列表展示 Token / 命中率 / 估算费用，支持价格配置（默认 DeepSeek 官方价格表，元 / 百万 tokens） | 关 |
 | `wechat.openclaw` | 微信接入（OpenClaw） | 扫码绑定个人微信，通过腾讯 openclaw-weixin / iLink 协议与 DSH Agent 文字聊天；支持白名单、room / per-user 会话模式、网关启停 | 关 |
 
 ## 融合功能与参考来源
@@ -152,6 +152,7 @@ dsh-tools 已将所需代码迁入 `lib/wechat/vendor/`，不再把 `dsh-weixin-
 - `POST /dsh-tools/api/restart` — 重启 dsh web（`restart.web` 启用时）
 - `POST /dsh-tools/api/harness-check` — DeepSeek Harness 版本检查（`harness.check` 启用时；仅检查，不升级）
 - `POST /dsh-tools/api/plugin-catalog` — 插件分类投影：loader 条目 + 来源分类（`plugin-catalog` 启用时；分类规则见 `lib/features/plugin-catalog.js`）
+- `POST /dsh-tools/api/usage/daily` — 按自然日聚合真实 usage（`ui.usage` 启用时；读取会话日志，带磁盘缓存 + 增量扫描）
 - `GET  /dsh-tools/api/events` — SSE 推送（`notify.task-done` 启用时）
 
 合并功能路由（对应功能启用时注册）：
@@ -162,6 +163,13 @@ dsh-tools 已将所需代码迁入 `lib/wechat/vendor/`，不再把 `dsh-weixin-
 - `POST /dsh-tools/wechat.openclaw/api/{status,login/start,login/poll,login/verify,login/cancel,gateway/start,gateway/stop,account/logout,media/list,media/clean,media/open,ai/config}`
 
 SSE 消息格式：`data: {"type":"turn-done","data":{"sessionId":"..."}}`。
+
+## 应用用量按天统计说明
+
+- 趋势柱状图优先读取会话日志（`<DSH_HOME>/sessions/**/session.jsonl.zstd`）中的真实 `assistant/message` usage，按请求实际发生日期聚合，而不是把整个会话累计值记到最后活跃日期。
+- 首次请求会全量扫描并写入磁盘缓存；后续只对 `size/mtime` 变化的日志增量重扫。
+- 缓存文件：`<DSH_HOME>/profiles/web/plugins-data/dsh-tools-usage-daily.json`。
+- 费用按模型分别计价后求和；悬停柱状图可查看该日期的 Token、会话数、命中率与估算费用。
 
 ## 新增一个「工具想法」
 

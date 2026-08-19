@@ -114,6 +114,12 @@ r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "ui.enh
 assert(r.body.value.featureConfig["ui.enhance"].historyPosition === "left" && r.body.value.featureConfig["ui.enhance"].historyLimit === 10, "config/feature overlays defaultConfig without dropping untouched keys");
 assert(r.body.value.features.find((f) => f.key === "ui.usage").enabled === false, "ui.usage defaults off (stock look preserved)");
 assert(r.body.value.features.find((f) => f.key === "ui.usage").panel === true, "ui.usage is a panel feature (own settings tab)");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "ui.usage", enabled: true });
+assert(r.status === 200 && r.body.value.features.find((f) => f.key === "ui.usage").enabled === true, "ui.usage can be enabled");
+r = await call(apiRoute, "POST", "/dsh-tools/api/usage/daily", {});
+assert(r.status === 200 && r.body.ok === true && r.body.value !== undefined && typeof r.body.value.days === "object", "usage/daily returns a days map");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "ui.usage", enabled: false });
+assert(r.status === 200 && r.body.value.features.find((f) => f.key === "ui.usage").enabled === false, "ui.usage can be disabled");
 assert(r.body.value.features.find((f) => f.key === "notify.task-done").alwaysOn === false, "notify.task-done is optional (v0.7.0)");
 assert(r.body.value.features.find((f) => f.key === "restart.web").alwaysOn === true, "restart.web is alwaysOn");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").alwaysOn === false, "delete-chat is optional");

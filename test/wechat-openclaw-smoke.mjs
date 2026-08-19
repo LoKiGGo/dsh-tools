@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { normalizeAllowFrom, isAllowed } from "../lib/wechat/allowlist.js";
 import { createLoginSession, submitVerifyCode, cancelLogin, loginSnapshot } from "../lib/wechat/login.js";
 import { runWeixinGateway, shouldUseModlensFallback } from "../lib/wechat/gateway.js";
+import { saveWechatMedia } from "../lib/wechat/media-store.js";
 import * as feature from "../lib/features/wechat-openclaw.js";
 
 // --- allowlist ---
@@ -32,6 +33,21 @@ assert.equal(shouldUseModlensFallback(false, ["modlens_read_image"]), true);
 assert.equal(shouldUseModlensFallback(false, ["bash"]), false);
 assert.equal(shouldUseModlensFallback(false, []), false);
 assert.equal(shouldUseModlensFallback(false, null), false);
+
+// --- media storage ---
+const mediaTmp2 = mkdtempSync(join(tmpdir(), "dsh-wx-store-"));
+const oldState2 = process.env.OPENCLAW_STATE_DIR;
+process.env.OPENCLAW_STATE_DIR = mediaTmp2;
+const saved = await saveWechatMedia(
+	Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+	undefined,
+	"inbound",
+	0,
+	"test.png",
+);
+assert.equal(saved.path.includes(join("inbound", "images")), true, "image saved under inbound/images");
+assert.equal(saved.path.includes(join("inbound", "inbound")), false, "no inbound/inbound nesting");
+process.env.OPENCLAW_STATE_DIR = oldState2;
 
 // --- login session primitives ---
 const session = createLoginSession();
@@ -120,7 +136,7 @@ assert.equal(logoutRes.body.value.error, "missing-account");
 
 // media/list returns cached files under the configured state dir.
 const mediaTmp = mkdtempSync(join(tmpdir(), "dsh-wx-media-"));
-const mediaDir = join(mediaTmp, "weixin-dsh", "media");
+const mediaDir = join(mediaTmp, "weixin-dsh", "media", "inbound", "images");
 mkdirSync(mediaDir, { recursive: true });
 writeFileSync(join(mediaDir, "a.png"), "x");
 const oldState = process.env.OPENCLAW_STATE_DIR;
@@ -133,7 +149,11 @@ await wechatRoute.handler(
 );
 assert.equal(mediaRes.body.ok, true);
 assert.equal(Array.isArray(mediaRes.body.value), true);
-assert.equal(mediaRes.body.value.some((f) => f.name === "a.png"), true);
+assert.equal(mediaRes.body.value.length, 1);
+const mediaDirEntry = mediaRes.body.value[0];
+assert.equal(mediaDirEntry.name, "media");
+assert.equal(mediaDirEntry.fileCount, 1);
+assert.equal(mediaDirEntry.size, 1);
 process.env.OPENCLAW_STATE_DIR = oldState;
 
 // ai/config with missing capabilities is handled (not unknown method).

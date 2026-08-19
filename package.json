@@ -1,6 +1,6 @@
 {
   "name": "dsh-tools",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "DSH web plugin: personal toolbox with per-feature toggles, task-done corner notification, and one-click dsh web restart.",
   "type": "module",
   "main": "lib/index.js",
@@ -31,7 +31,6 @@
     }
   },
   "dependencies": {
-    "dsh-weixin-gateway": "^0.3.4",
     "qrcode": "^1.5.4"
   },
   "peerDependencies": {

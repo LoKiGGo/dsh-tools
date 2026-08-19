@@ -81,8 +81,8 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
 ### 微信媒体能力
 
 - **图片 / 视频 / 文件收发**：不需要外接模型。微信图片/文件会下载到
-  `~/.openclaw/weixin-dsh/media/`，Agent 回复中写 `[image:路径]` /
-  `[video:路径]` / `[file:路径]` 即可发送。
+  `~/.openclaw/weixin-dsh/media/inbound/{images,videos,files,voice}/`，
+  Agent 回复中写 `[image:路径]` / `[video:路径]` / `[file:路径]` 即可发送。
 - **语音转文字（ASR）**：需要 OpenAI 兼容 ASR 接口，配置
   `AI_ASR_BASE_URL` / `AI_ASR_KEY` / `AI_ASR_MODEL`（默认 `SenseVoiceSmall`），
   或全局 `AI_GATEWAY_BASE_URL` / `AI_GATEWAY_KEY`。
@@ -122,6 +122,24 @@ AI_IMAGE_MODEL=gpt-image-2
 AI_GATEWAY_BASE_URL=https://your-gateway/v1
 AI_GATEWAY_KEY=sk-xxx
 ```
+
+### 参考来源
+
+微信接入的协议层与部分媒体逻辑参考/改写自以下开源项目（MIT 许可）：
+
+- [shaodushu/dsh-weixin-gateway](https://github.com/shaodushu/dsh-weixin-gateway) —— 微信消息网关 dsh 插件：复用腾讯 openclaw-weixin 协议层，dsh 作为执行层
+- [Tencent/openclaw-weixin](https://github.com/Tencent/openclaw-weixin) —— 腾讯微信渠道插件（协议/接口参考）
+
+dsh-tools 已将所需代码迁入 `lib/wechat/vendor/`，不再把 `dsh-weixin-gateway` 作为运行时依赖。
+
+### 传输协议安全
+
+- 与微信 iLink 服务通信统一使用 **HTTPS**（`https://ilinkai.weixin.qq.com` 等）。
+- 微信 bot token 只保存在本机 `~/.openclaw/openclaw-weixin/accounts/`，不写入 dsh-tools 配置、不进入 git。
+- 日志与 API 返回中对 token 做脱敏，不输出完整凭据。
+- 媒体下载/上传走微信 CDN，涉及加密媒体时使用 AES 解密/加密；媒体文件只保存在本机 `~/.openclaw/weixin-dsh/media/`。
+- 所有 dsh-tools 本地 API 继续沿用同源 + 信任围栏（`api.fence`），非回环/未授权来源会被拒绝。
+- AI 能力凭据（`AI_*`）只写入权限 0600 的 `~/.openclaw/weixin-dsh/.env`，不进入插件配置或 git。
 
 ## 宿主 API（同源 + 信任围栏，POST 除注明外）
 

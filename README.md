@@ -236,6 +236,16 @@ PowerShell 延迟启动器（`dsh-tools-restart-launcher.ps1` + 同名 `.cmd`）
 explorer.exe 常驻（交互式桌面的常态）。若重启仍失败，把上述日志文件
 发来即可定位。
 
+## 客户端构建
+
+`lib/client.js` 是由 `lib/client/` 下的源码片段构建生成的单文件客户端 bundle。修改 `lib/client/` 后运行：
+
+```sh
+npm run build:client
+```
+
+发布到 npm / GitHub Release 时 `prepack` 会自动执行构建，确保 `lib/client.js` 与源码一致；`github:` / `git+https` 直装方式需要仓库中已提交构建后的 `lib/client.js`。
+
 ## 测试
 
 ```sh

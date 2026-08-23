@@ -297,6 +297,14 @@ assert(listed.find((s) => s.id === "session-4").sizeBytes === 4, "tiny session s
 assert(listed.find((s) => s.id === "session-1").workspace.sizeBytes === 2063, "workspace size = sum of its sessions' chat records (15+2048), not the workspace dir (100)");
 assert(listed.find((s) => s.id === "session-2").workspace.sizeBytes === 16, "workspace size works even when the workspace dir is missing");
 
+// v0.10: light list (includeSizes=false) must return immediately without size scans.
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/list", { includeSizes: false });
+assert(r.status === 200 && r.body.ok === true, "delete-chat light list succeeds");
+const lightListed = r.body.value;
+assert(lightListed.length === 4, "light list returns all sessions");
+assert(lightListed.every((s) => s.sizeBytes === null), "light list skips session sizes");
+assert(lightListed.every((s) => s.workspace === null || s.workspace.sizeBytes === null), "light list skips workspace sizes");
+
 // --- delete-chat open-folder: workspace whitelist + launcher spawn (v0.6.1) ---
 
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/open-folder", { path: wsA });

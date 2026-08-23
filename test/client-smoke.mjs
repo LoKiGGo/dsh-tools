@@ -12,7 +12,7 @@
 
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const require = createRequire(import.meta.url);
 // Resolved at runtime so the public repo carries no machine-specific path.
@@ -26,8 +26,18 @@ function resolveFromProfile(name) {
 	}
 }
 
-const reactPath = resolveFromProfile("react");
 const reactDomServerPath = resolveFromProfile("react-dom/server");
+// 必须让 React 与 react-dom/server 来自同一份依赖，否则 SSR 会因 React 副本不一致
+// 报 “Objects are not valid as a React child”。优先取 react-dom/server 同级的 react。
+const reactPath = reactDomServerPath === undefined
+	? resolveFromProfile("react")
+	: (() => {
+		try {
+			return require.resolve("react", { paths: [dirname(reactDomServerPath)] });
+		} catch {
+			return resolveFromProfile("react");
+		}
+	})();
 
 let failures = 0;
 function assert(cond, msg) {
@@ -316,6 +326,14 @@ if (serverRender === undefined) {
 	assert(mdReg({ features: [] }) === true, "unknown feature registers optimistically");
 	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }] }) === true, "enabled ui.enhance registers the shadow");
 	assert(mdReg({ features: [{ key: "ui.enhance", enabled: false }] }) === false, "disabled ui.enhance unregisters the shadow (stock renderer wins)");
+	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }], featureConfig: { "ui.enhance": { markdownEnabled: false } } }) === false, "markdownEnabled=false unregisters the shadow even when ui.enhance is on");
+	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }], featureConfig: { "ui.enhance": { markdownEnabled: true } } }) === true, "markdownEnabled=true registers the shadow when ui.enhance is on");
+	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }], featureConfig: { "ui.enhance": {} } }) === true, "missing markdownEnabled defaults to on");
+
+	const protectRef = captured.__dshToolsTest && captured.__dshToolsTest.protectReferenceBoundaries;
+	assert(typeof protectRef === "function", "test hook exports protectReferenceBoundaries");
+	assert(protectRef("@plan.txt先写计划书") === "@plan.txt\u200A先写计划书", "file reference boundary inserts hair space before CJK text");
+	assert(protectRef("@plan.txt 后面有空格") === "@plan.txt 后面有空格", "file reference with following space is left unchanged");
 
 	// --- history registration gate + turns model (ui.enhance) ---
 

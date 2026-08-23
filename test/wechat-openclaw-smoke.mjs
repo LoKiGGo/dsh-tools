@@ -17,6 +17,7 @@ import { normalizeAllowFrom, isAllowed } from "../lib/wechat/allowlist.js";
 import { createLoginSession, submitVerifyCode, cancelLogin, loginSnapshot } from "../lib/wechat/login.js";
 import { runWeixinGateway, shouldUseModlensFallback } from "../lib/wechat/gateway.js";
 import { saveWechatMedia } from "../lib/wechat/media-store.js";
+import { AI_CAPABILITIES } from "../lib/wechat/vendor/weixin/ai-config.js";
 import * as feature from "../lib/features/wechat-openclaw.js";
 
 // --- allowlist ---
@@ -77,6 +78,9 @@ assert.equal(feature.label.includes("微信"), true);
 assert.equal(Array.isArray(feature.defaultConfig.allowFrom), true);
 assert.equal(feature.defaultConfig.sessionMode, "room");
 assert.equal(typeof runWeixinGateway, "function", "gateway module loads with DSH dev deps");
+const visionDef = AI_CAPABILITIES.find((d) => d.id === "vision");
+assert.equal(visionDef?.defaultModel, "deepseek-v4-flash-vision-exp");
+
 
 // --- feature route registration (no DSH agent services needed) ---
 const routes = [];

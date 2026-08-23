@@ -14,14 +14,14 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | --- | --- | --- | --- |
 | `notify.task-done` | 任务完成提示 | 当前对话任务完成且网页未聚焦时，在 Windows 桌面右下角弹出系统提示框（置顶），点击跳回会话；开关关闭时不监听、不弹提示 | 开 |
 | `harness.check` | DeepSeek Harness 版本检查 | 「功能开关」页签顶部卡片：检查 DeepSeek Harness 当前版本与 GitHub 最新 Release/tag，仅检查不升级；每次 dsh web 启动后仅首次打开时自动检查，之后手动点「重新检查」 | 强制开启（无开关） |
-| `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动刷新页面（开发测试快循环） | 强制开启（无开关） |
-| `delete-chat` | 会话管理 | 归档会话查看（每次 dsh web 启动后首次打开自动加载，可手动刷新）、单条/批量删除会话；列表显示每个会话与工作区占用的磁盘空间；删除会话页点击工作区路径可打开对应文件夹 | 开 |
+| `restart.web` | 一键重启 dsh web | 「功能开关」页签顶部按钮：重启服务并自动打开新窗口，旧页面自动关闭（开发测试快循环） | 强制开启（无开关） |
+| `delete-chat` | 会话管理 | 归档会话查看、单条/批量删除会话；列表显示每个会话与工作区占用的磁盘空间；v1.0.0 起先快速返回列表再后台补齐大小，并对目录大小做磁盘缓存，打开更快；删除会话页点击工作区路径可打开对应文件夹 | 开 |
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关；点击插件名可跳转其 GitHub 页（有则显示），行内展示插件功能描述 | 开 |
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:` / `git+https://github.com/...` / URL spec，Releases/tags API 探测）安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
-| `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置） | 关 |
-| `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天 / 自定义日期）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数）；趋势柱图优先读取会话日志按自然日统计真实 usage（磁盘缓存 + 增量扫描），悬停显示具体数据，会话用量列表展示 Token / 命中率 / 估算费用，支持价格配置（默认 DeepSeek 官方价格表，元 / 百万 tokens） | 关 |
-| `wechat.openclaw` | 微信接入（OpenClaw） | 扫码绑定个人微信，通过腾讯 openclaw-weixin / iLink 协议与 DSH Agent 文字聊天；支持白名单、room / per-user 会话模式、网关启停 | 关 |
+| `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 / @文件 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置）；v1.0.0 起 Markdown 渲染有独立开关，可单独关闭 | 关 |
+| `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天 / 自定义日期）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数）；趋势柱图优先读取会话日志按自然日统计真实 usage（磁盘缓存 + 增量扫描），悬停显示具体数据，会话用量列表展示 Token / 命中率 / 估算费用；支持价格配置，v1.0.0 起费用卡片可直接切换峰 / 谷价格（默认谷价） | 关 |
+| `wechat.openclaw` | 微信接入（OpenClaw） | 扫码绑定个人微信，通过腾讯 openclaw-weixin / iLink 协议与 DSH Agent 文字聊天；支持白名单、room / per-user 会话模式、网关启停；v1.0.0 起页签内“使用说明”可展开 / 折叠 | 关 |
 
 ## 融合功能与参考来源
 
@@ -35,6 +35,15 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 
 > 说明：ui-custom 的 `appearance`（外观）、`shortcuts`（快捷键）与
 > `marketplace`（插件市场）模块未融合。
+
+## v1.0.0 更新
+
+- 一键重启 dsh web 后不再刷新旧页面，改为自动打开新窗口并关闭旧页面。
+- 会话管理加载优化：先快速返回列表再后台补齐磁盘占用，并对目录大小做磁盘缓存。
+- 界面增强中 Markdown 渲染新增独立开关；修复 `@文件引用` 后紧跟中文时后续文字被一起高亮的问题。
+- 应用用量底部提示文案更新；费用卡片新增峰 / 谷价格一键切换，默认按谷价计算。
+- 微信接入页签的“使用说明”改为可展开 / 折叠。
+- 修复 `client-smoke` 因 React 与 react-dom/server 版本不一致导致的 server-render 失败。
 
 ## 安装
 
@@ -87,7 +96,8 @@ GitHub Releases/tags API 自动检测本仓库新版本并一键更新（更新�
   `AI_ASR_BASE_URL` / `AI_ASR_KEY` / `AI_ASR_MODEL`（默认 `SenseVoiceSmall`），
   或全局 `AI_GATEWAY_BASE_URL` / `AI_GATEWAY_KEY`。
 - **图像理解（Vision）**：需要 OpenAI 兼容视觉接口，配置
-  `AI_VISION_BASE_URL` / `AI_VISION_KEY` / `AI_VISION_MODEL`（默认 `qwen2.5-vl`）。
+  `AI_VISION_BASE_URL` / `AI_VISION_KEY` / `AI_VISION_MODEL`（默认 `deepseek-v4-flash-vision-exp`，
+  即 DeepSeek 官方多模态视觉模型；使用第三方网关时可改为自己的模型名）。
   未配置时，如果已安装 `@liustack/modlens`，微信图片会自动提示 Agent 使用
   `modlens_read_image` 读取。
 - **文生图（Image）**：需要 OpenAI 兼容图像生成接口，配置
@@ -107,9 +117,9 @@ AI_ASR_BASE_URL=https://your-gateway/v1
 AI_ASR_KEY=sk-xxx
 AI_ASR_MODEL=SenseVoiceSmall
 
-AI_VISION_BASE_URL=https://your-gateway/v1
+AI_VISION_BASE_URL=https://api.deepseek.com/v1
 AI_VISION_KEY=sk-xxx
-AI_VISION_MODEL=qwen2.5-vl
+AI_VISION_MODEL=deepseek-v4-flash-vision-exp
 
 AI_IMAGE_BASE_URL=https://your-gateway/v1
 AI_IMAGE_KEY=sk-xxx
@@ -170,6 +180,7 @@ SSE 消息格式：`data: {"type":"turn-done","data":{"sessionId":"..."}}`。
 - 首次请求会全量扫描并写入磁盘缓存；后续只对 `size/mtime` 变化的日志增量重扫。
 - 缓存文件：`<DSH_HOME>/profiles/web/plugins-data/dsh-tools-usage-daily.json`。
 - 费用按模型分别计价后求和；悬停柱状图可查看该日期的 Token、会话数、命中率与估算费用。
+- 费用卡片支持峰 / 谷价格一键切换，默认按谷（空闲）价计算；价格配置面板仍可手工调整价格表。
 
 ## 新增一个「工具想法」
 
@@ -218,7 +229,8 @@ PowerShell 延迟启动器（`dsh-tools-restart-launcher.ps1` + 同名 `.cmd`）
 受服务器所在 kill-on-close job 的连坐清除（直接由服务器派生子进程的
 方案实测会在 Start-Process 之前被连坐杀死）。启动器等待 2s 规避端口
 占用竞态后 `Start-Process` 拉起原命令，先回包、600ms 后退出当前进程；
-客户端轮询 `ping`，服务恢复即 `location.reload()`。
+新窗口由重启流程自动打开；客户端轮询 `ping`，服务恢复后关闭旧页面，
+不再刷新旧页面。
 
 关键实现细节（均由 `test/restart-launcher-smoke.mjs` 用真实生成器文本
 验证）：
@@ -254,16 +266,17 @@ node test/plugin-catalog-smoke.mjs  # 插件分类：分类判定纯函数（sco
 node test/client-smoke.mjs     # 客户端 bundle：执行/槽位注册/初始渲染/提示判定/标签页模型/用量与外观纯函数
 node test/mutations-smoke.mjs  # profile 文件改写（plugin-toggle / update-plugin，假 profile）
 node test/update-github-smoke.mjs   # GitHub 安装来源：spec 分类/解析/版本探测/检查流程（假 profile）
+node test/harness-check-smoke.mjs   # DeepSeek Harness 版本检查：版本发现/比较/状态机（假 profile）
 node test/restart-launcher-smoke.mjs  # 一键重启启动器（真实生成器文本，无害载荷）
 node test/explorer-dispatch-smoke.mjs # explorer 分发链（cmd→隐藏 powershell）
 node test/restart-sequence-smoke.mjs  # 真实 restart 方法：响应+自退出（一次性牺牲进程）
 node test/wechat-openclaw-smoke.mjs  # 微信接入：白名单/登录状态机/feature 元数据（不连真实微信）
 ```
 
-八个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
-隔离；仅 `client-smoke.mjs` 以只读方式解析真实 profile 中的 react 用于
-可选的服务端渲染，其余测试绝不触碰真实 profile）。注意：
-`restart-sequence-smoke.mjs` 的"复活进程"阶段在 DSH agent 沙箱内无法
+十个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
+隔离；仅 `client-smoke.mjs` 以只读方式解析真实 profile 中的 react 与
+react-dom/server 用于可选的服务端渲染，其余测试绝不触碰真实 profile）。
+注意：`restart-sequence-smoke.mjs` 的"复活进程"阶段在 DSH agent 沙箱内无法
 完成 explorer 分发链而跳过——在普通终端运行该测试会完整断言整条重生链。
 
 ## 任务完成提示（桌面通知）说明

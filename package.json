@@ -1,6 +1,6 @@
 {
   "name": "dsh-tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DSH web plugin: personal toolbox with per-feature toggles, task-done corner notification, and one-click dsh web restart.",
   "type": "module",
   "scripts": {
@@ -51,9 +51,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/qq1376868542-lang/dsh-tools.git"
+    "url": "git+https://github.com/LoKiGGo/dsh-tools.git"
   },
-  "homepage": "https://github.com/qq1376868542-lang/dsh-tools",
+  "homepage": "https://github.com/LoKiGGo/dsh-tools",
   "keywords": [
     "deepseek",
     "harness",

@@ -19,7 +19,6 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关；点击插件名可跳转其 GitHub 页（有则显示），行内展示插件功能描述 | 开 |
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:` / `git+https://github.com/...` / URL spec，Releases/tags API 探测）安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
 | `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
-| `ui.enhance` | 界面增强 | 单一开关收纳：用户消息 Markdown 渲染（标题、列表、代码块、@子代理 / @技能 / @文件 引用）+ 浮动历史条（悬停波浪高亮、点击跳转对应回合，支持「悬挂」；位置 / 数量在「界面增强」页签配置）；v1.0.0 起 Markdown 渲染有独立开关，可单独关闭 | 关 |
 | `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天 / 自定义日期）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数）；趋势柱图优先读取会话日志按自然日统计真实 usage（磁盘缓存 + 增量扫描），悬停显示具体数据，会话用量列表展示 Token / 命中率 / 估算费用；支持价格配置，v1.0.0 起费用卡片可直接切换峰 / 谷价格（默认谷价） | 关 |
 | `wechat.openclaw` | 微信接入（OpenClaw） | 扫码绑定个人微信，通过腾讯 openclaw-weixin / iLink 协议与 DSH Agent 文字聊天；支持白名单、room / per-user 会话模式、网关启停；v1.0.0 起页签内“使用说明”可展开 / 折叠 | 关 |
 
@@ -31,10 +30,16 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 
 | 功能 | 来源 | 许可 |
 | --- | --- | --- |
-| `ui.enhance`（Markdown 渲染 + 浮动历史条）/ `ui.usage` | [yoli-mi/dsh-client-ui-custom](https://github.com/yoli-mi/dsh-client-ui-custom) | MIT（Copyright (c) 2026 Yoli-mi） |
+| `ui.usage` | [yoli-mi/dsh-client-ui-custom](https://github.com/yoli-mi/dsh-client-ui-custom) | MIT（Copyright (c) 2026 Yoli-mi） |
 
-> 说明：ui-custom 的 `appearance`（外观）、`shortcuts`（快捷键）与
-> `marketplace`（插件市场）模块未融合。
+> 说明：ui-custom 的 `appearance`（外观）、`shortcuts`（快捷键）、
+> `marketplace`（插件市场）模块未融合；`ui.enhance`（Markdown 渲染 +
+> 浮动历史条）自 v1.1.0 起移除，与 Harness 自带功能定位重复。
+
+## v1.1.0 更新
+
+- 更新兼容 DeepSeek Harness 0.1.2-alpha.2（devDependencies 对齐到 0.1.2-alpha.2）。
+- 删除「界面增强」（`ui.enhance`）功能：用户消息 Markdown 渲染 + 浮动历史条，与 Harness 自带功能定位重复。
 
 ## v1.0.0 更新
 

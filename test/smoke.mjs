@@ -96,7 +96,7 @@ assert(apiRoute !== undefined, "framework route /dsh-tools/api registered");
 // --- config snapshot ---
 let r = await call(apiRoute, "POST", "/dsh-tools/api/config", {});
 assert(r.status === 200 && r.body.ok === true, "config returns ok envelope");
-assert(r.body.value.features.length === 10, "config snapshot lists 10 features");
+assert(r.body.value.features.length === 9, "config snapshot lists 9 features");
 assert(r.body.value.features.find((f) => f.key === "notify.task-done").enabled === true, "notify.task-done defaults on");
 assert(r.body.value.features.find((f) => f.key === "restart.web").enabled === true, "restart.web defaults on");
 assert(r.body.value.features.find((f) => f.key === "delete-chat").enabled === true, "delete-chat defaults on");
@@ -106,12 +106,8 @@ assert(r.body.value.features.find((f) => f.key === "plugin-catalog").enabled ===
 assert(r.body.value.features.find((f) => f.key === "harness.check").enabled === true, "harness.check defaults on");
 assert(r.body.value.features.find((f) => f.key === "harness.check").alwaysOn === true, "harness.check is alwaysOn");
 assert(r.body.value.features.find((f) => f.key === "harness.check").panel === false, "harness.check is a non-panel feature");
-assert(r.body.value.features.find((f) => f.key === "ui.enhance").enabled === false, "ui.enhance defaults off (stock look preserved)");
-assert(r.body.value.features.find((f) => f.key === "ui.enhance").panel === true, "ui.enhance is a panel feature (own settings tab)");
-assert(r.body.value.features.find((f) => f.key === "ui.enhance").hasConfig === true, "ui.enhance declares defaultConfig (hasConfig=true)");
-assert(r.body.value.featureConfig["ui.enhance"].historyPosition === "off" && r.body.value.featureConfig["ui.enhance"].historyLimit === 10, "ui.enhance defaultConfig merged into featureConfig");
-r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "ui.enhance", config: { historyPosition: "left" } });
-assert(r.body.value.featureConfig["ui.enhance"].historyPosition === "left" && r.body.value.featureConfig["ui.enhance"].historyLimit === 10, "config/feature overlays defaultConfig without dropping untouched keys");
+r = await call(apiRoute, "POST", "/dsh-tools/api/config/feature", { key: "ui.usage", config: { priceMode: "peak" } });
+assert(r.body.value.featureConfig["ui.usage"].priceMode === "peak" && r.body.value.featureConfig["ui.usage"].pricing["default"].input === 1.5, "config/feature overlays defaultConfig without dropping untouched keys");
 assert(r.body.value.features.find((f) => f.key === "ui.usage").enabled === false, "ui.usage defaults off (stock look preserved)");
 assert(r.body.value.features.find((f) => f.key === "ui.usage").panel === true, "ui.usage is a panel feature (own settings tab)");
 r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "ui.usage", enabled: true });

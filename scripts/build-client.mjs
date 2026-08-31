@@ -32,9 +32,6 @@ const FRAGMENTS = [
   "wechat.js",
   "settings.js",
   "notify.js",
-  "markdown.js",
-  "history.js",
-  "enhance.js",
   "usage.js",
   "apply.js",
 ];

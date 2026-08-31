@@ -135,23 +135,14 @@ const fakeCtx = {
 
 const dispose = captured.apply(fakeCtx);
 assert(typeof dispose === "function", "apply returns a disposer");
-// settings.section + shell.overlay + 2× conversation.chat.node + details
-// + assistant-actions + settings.plugins.tab
-assert(registered.length === 7, "seven slot entries registered");
+// settings.section + shell.overlay + settings.plugins.tab
+assert(registered.length === 3, "three slot entries registered");
 
 const settingsReg = registered.find((r) => r.opts.name === "settings.section");
 const overlayReg = registered.find((r) => r.opts.name === "shell.overlay" && r.opts.id === "dsh-tools-notify");
-const mdUserReg = registered.find((r) => r.opts.name === "conversation.chat.node" && r.opts.key === "user");
-const mdSteeringReg = registered.find((r) => r.opts.name === "conversation.chat.node" && r.opts.key === "steering");
-const detailsReg = registered.find((r) => r.opts.name === "details");
-const pinReg = registered.find((r) => r.opts.name === "conversation.chat.assistant-actions");
 const catalogReg = registered.find((r) => r.opts.name === "settings.plugins.tab");
 assert(settingsReg !== undefined && settingsReg.opts.id === "dsh-tools" && settingsReg.opts.order === 35, "settings.section id dsh-tools order 35");
 assert(overlayReg !== undefined && overlayReg.opts.id === "dsh-tools-notify", "shell.overlay id dsh-tools-notify");
-assert(mdUserReg !== undefined && mdUserReg.opts.priority === -1 && mdUserReg.opts.locale === "conversation", "conversation.chat.node user shadow registered with priority -1");
-assert(mdSteeringReg !== undefined && mdSteeringReg.opts.key === "steering" && mdSteeringReg.opts.priority === -1, "conversation.chat.node steering shadow registered with priority -1");
-assert(detailsReg !== undefined && detailsReg.opts.priority === -1 && typeof detailsReg.opts.inject === "function", "details entry registered with priority -1 and an inject face");
-assert(pinReg !== undefined && pinReg.opts.id === "dsh-tools-pin" && pinReg.opts.order === 5, "assistant-actions pin entry id dsh-tools-pin order 5");
 assert(catalogReg !== undefined && catalogReg.opts.id === "plugin-catalog" && catalogReg.opts.order === 20 && catalogReg.opts.label === "插件分类", "settings.plugins.tab entry id plugin-catalog order 20");
 
 // --- initial render paths (needs react + react-dom/server) ---
@@ -262,19 +253,6 @@ if (serverRender === undefined) {
 	assert(tabs.length === 3 && tabs[1].key === "a" && tabs[2].key === "b", "panel:false features get no settings tab; panel:true (and unset) are included");
 	tabs = tabsOf({
 		features: [
-			{ key: "ui.enhance", label: "界面增强", enabled: true, panel: true },
-			{ key: "a", label: "功能A", enabled: false },
-		],
-	});
-	assert(tabs.length === 2 && tabs[1].key === "ui.enhance", "enabled panel feature ui.enhance gets its own tab");
-	tabs = tabsOf({
-		features: [
-			{ key: "ui.enhance", label: "界面增强", enabled: false, panel: true },
-		],
-	});
-	assert(tabs.length === 1, "disabled ui.enhance yields no tab");
-	tabs = tabsOf({
-		features: [
 			{ key: "ui.usage", label: "应用用量", enabled: true, panel: true },
 			{ key: "a", label: "功能A", enabled: false },
 		],
@@ -317,59 +295,6 @@ if (serverRender === undefined) {
 	assert(catalogShortFn("@deepseek-ai/dsh-base") === "base", "short name strips the official scope and dsh- prefix (same rule as the official page)");
 	assert(catalogShortFn("@deepseek-ai/dsh-host-plugin-inventory") === "plugin-inventory", "short name strips dsh-host- prefix");
 	assert(catalogShortFn("dshmarket") === "dshmarket", "plain names pass through");
-
-	// --- markdown node registration gate (ui.enhance) ---
-
-	const mdReg = captured.__dshToolsTest && captured.__dshToolsTest.markdownNodeRegistration;
-	assert(typeof mdReg === "function", "test hook exports markdownNodeRegistration");
-	assert(mdReg(null) === true, "null config registers the shadow optimistically");
-	assert(mdReg({ features: [] }) === true, "unknown feature registers optimistically");
-	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }] }) === true, "enabled ui.enhance registers the shadow");
-	assert(mdReg({ features: [{ key: "ui.enhance", enabled: false }] }) === false, "disabled ui.enhance unregisters the shadow (stock renderer wins)");
-	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }], featureConfig: { "ui.enhance": { markdownEnabled: false } } }) === false, "markdownEnabled=false unregisters the shadow even when ui.enhance is on");
-	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }], featureConfig: { "ui.enhance": { markdownEnabled: true } } }) === true, "markdownEnabled=true registers the shadow when ui.enhance is on");
-	assert(mdReg({ features: [{ key: "ui.enhance", enabled: true }], featureConfig: { "ui.enhance": {} } }) === true, "missing markdownEnabled defaults to on");
-
-	const protectRef = captured.__dshToolsTest && captured.__dshToolsTest.protectReferenceBoundaries;
-	assert(typeof protectRef === "function", "test hook exports protectReferenceBoundaries");
-	assert(protectRef("@plan.txt先写计划书") === "@plan.txt\u200A先写计划书", "file reference boundary inserts hair space before CJK text");
-	assert(protectRef("@plan.txt 后面有空格") === "@plan.txt 后面有空格", "file reference with following space is left unchanged");
-
-	// --- history registration gate + turns model (ui.enhance) ---
-
-	const hsReg = captured.__dshToolsTest && captured.__dshToolsTest.historyRegistration;
-	const buildTurnsFn = captured.__dshToolsTest && captured.__dshToolsTest.buildTurns;
-	const mergeTurnsFn = captured.__dshToolsTest && captured.__dshToolsTest.mergeVisibleTurns;
-	assert(typeof hsReg === "function" && typeof buildTurnsFn === "function" && typeof mergeTurnsFn === "function", "test hooks export history helpers");
-	assert(hsReg(null) === true, "null config registers the strip optimistically");
-	assert(hsReg({ features: [{ key: "ui.enhance", enabled: false }] }) === false, "disabled ui.enhance unregisters details + pin");
-
-	const fakeSnapshot = {
-		order: ["k1", "k2", "k3", "k4"],
-		nodes: {
-			get: (key) => {
-				const rows = {
-					k1: { kind: "user", data: { content: [{ type: "text", text: "第一回合问题" }] }, location: { kind: "turn", turn: { turn: 1 } } },
-					k2: { kind: "assistant", data: { blocks: [{ kind: "text", text: "助手回答" }] }, location: { kind: "step", turn: { turn: 1 } } },
-					k3: { kind: "steering", data: { content: [{ type: "text", text: "steering 提示" }] }, location: { kind: "turn", turn: { turn: 2 } } },
-					k4: { kind: "user", data: { content: [{ type: "image" }] }, location: { kind: "turn", turn: { turn: 3 } } },
-				};
-				return rows[key];
-			},
-		},
-		legacy: { turnTimings: { get: (n) => (n === 1 ? { startTime: 1000 } : undefined) } },
-	};
-	const turns = buildTurnsFn(fakeSnapshot);
-	assert(turns.length === 3, "buildTurns keeps only user/steering nodes");
-	assert(turns[0].key === "k1" && turns[0].turn === 1 && turns[0].question === "第一回合问题" && turns[0].time === 1000, "turn carries key/turn/question/time");
-	assert(turns[1].key === "k3" && turns[1].turn === 2, "steering nodes become turns");
-	assert(turns[2].question === "" && turns[2].time === undefined, "textless turn yields empty preview and no timing");
-	const merged = mergeTurnsFn(turns, 1, new Set([2]));
-	assert(merged.length === 2 && merged[0].key === "k3" && merged[1].key === "k4", "limit keeps the recent turn and merges pinned back in window order");
-	const mergedAll = mergeTurnsFn(turns, 0, new Set());
-	assert(mergedAll.length === 3, "zero limit shows all turns");
-	const mergedPinned = mergeTurnsFn(turns, 1, new Set([99]));
-	assert(mergedPinned.length === 1 && mergedPinned[0].key === "k4", "absent pinned numbers are ignored (recent turn kept)");
 
 	// --- usage aggregation pure functions (ui.usage) ---
 

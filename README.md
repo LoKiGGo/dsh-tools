@@ -41,6 +41,12 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 - 更新兼容 DeepSeek Harness 0.1.2-alpha.2（devDependencies 对齐到 0.1.2-alpha.2）。
 - 删除「界面增强」（`ui.enhance`）功能：用户消息 Markdown 渲染 + 浮动历史条，与 Harness 自带功能定位重复。
 
+## v1.1.1 更新
+
+- 更新兼容 DeepSeek Harness 0.1.2-rc.1（devDependencies 对齐到 0.1.2-rc.1）。
+- 微信接入的 AgentBridge 适配宿主会话读取 API：宿主已移除 `Session.events`，改为 `session.snapshotEvents()` 读取事件流（`lib/wechat/vendor/bridge.js`）。微信 AI 回复要求宿主提供该 API（DSH 0.1.2-alpha.4 及以上）；更老宿主上该功能不可用。
+- 应用用量口径实证（rc.1 会话日志多代采样）：`inputTokens + outputTokens + cacheReadTokens ≡ totalTokens`，宿主不单列 cache-write 用量，现有聚合数值精确，无需改动。
+
 ## v1.0.0 更新
 
 - 一键重启 dsh web 后不再刷新旧页面，改为自动打开新窗口并关闭旧页面。

@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { normalizeAllowFrom, isAllowed } from "../lib/wechat/allowlist.js";
 import { createLoginSession, submitVerifyCode, cancelLogin, loginSnapshot } from "../lib/wechat/login.js";
 import { runWeixinGateway, shouldUseModlensFallback } from "../lib/wechat/gateway.js";
+import { askAgentStreaming, applyStreamChunk } from "../lib/wechat/vendor/bridge.js";
 import { saveWechatMedia } from "../lib/wechat/media-store.js";
 import { AI_CAPABILITIES } from "../lib/wechat/vendor/weixin/ai-config.js";
 import * as feature from "../lib/features/wechat-openclaw.js";
@@ -171,5 +172,81 @@ assert.equal(aiRes.body.ok, true);
 assert.equal(aiRes.body.value.ok, false);
 assert.equal(aiRes.body.value.error, "bad-request");
 disposer();
+
+// --- bridge streaming channels ---
+// 0.1.3-alpha.1 起宿主移除了顶层 assistant/chunk 会话事件，实时增量改由
+// agent/assistant-stream 帧发布；两个通道都必须喂出文本，且一个增量都没有时
+// 必须整段兜底（否则微信 gateway 只从 onDelta 取文本 → 回复静默为空）。
+const assistantMessage = (text) => ({
+	seq: 2,
+	type: "assistant/message",
+	data: { message: { content: [{ type: "text", text }] }, usage: { inputTokens: 1, outputTokens: 1 } },
+});
+function makeFakeHandle(events, script) {
+	const listeners = new Map();
+	const emit = (name, ...args) => {
+		for (const callback of [...(listeners.get(name) ?? [])]) callback(...args);
+	};
+	const agent = {
+		session: { seq: 0, snapshotEvents: () => events },
+		ctx: {
+			on: (name, callback) => {
+				const list = listeners.get(name) ?? [];
+				list.push(callback);
+				listeners.set(name, list);
+				return () => {
+					const current = listeners.get(name) ?? [];
+					const index = current.indexOf(callback);
+					if (index >= 0) current.splice(index, 1);
+				};
+			},
+		},
+		followup: () => { script?.(emit); },
+		whenIdle: async () => {},
+	};
+	return { agent, listenerCount: (name) => (listeners.get(name) ?? []).length };
+}
+
+// v2 通道：agent/assistant-stream 帧
+const v2Handle = makeFakeHandle([{ seq: 1, type: "turn/start" }, assistantMessage("你好世界")], (emit) => {
+	emit("agent/assistant-stream", { agent: v2Handle.agent, frame: { type: "start" } });
+	emit("agent/assistant-stream", { agent: v2Handle.agent, frame: { type: "chunk", chunk: { type: "text-delta", text: "你好" } } });
+	emit("agent/assistant-stream", { agent: v2Handle.agent, frame: { type: "chunk", chunk: { type: "text-delta", text: "世界" } } });
+	emit("agent/assistant-stream", { agent: v2Handle.agent, frame: { type: "end", outcome: { kind: "committed" } } });
+});
+const v2Deltas = [];
+let v2TurnStarts = 0;
+const v2Result = await askAgentStreaming(v2Handle, "hi", {
+	onDelta: (delta) => v2Deltas.push(delta),
+	onTurnStart: () => { v2TurnStarts += 1; },
+});
+assert.deepEqual(v2Deltas, ["你好", "世界"], "assistant-stream frames deliver deltas");
+assert.equal(v2TurnStarts, 1, "frame start maps to onTurnStart");
+assert.equal(v2Result.text, "你好世界", "summarize still reads the durable assistant/message");
+assert.equal(v2Handle.listenerCount("agent/assistant-stream"), 0, "frame subscription disposed after ask");
+assert.equal(v2Handle.listenerCount("session/event"), 0, "legacy subscription disposed after ask");
+
+// 旧通道：session/event 的 assistant/chunk 信封仍可用（<= 0.1.2 宿主）
+const legacyHandle = makeFakeHandle([{ seq: 1, type: "turn/start" }, assistantMessage("旧宿主回复")], (emit) => {
+	emit("session/event", null, { seq: 1, type: "assistant/chunk", data: { chunk: { type: "text-delta", text: "旧" } } });
+});
+const legacyDeltas = [];
+await askAgentStreaming(legacyHandle, "hi", { onDelta: (delta) => legacyDeltas.push(delta) });
+assert.deepEqual(legacyDeltas, ["旧"], "legacy assistant/chunk envelope still feeds deltas");
+
+// 兜底：两个通道都没有增量时，整段聚合文本仍要交给调用方
+const silentHandle = makeFakeHandle([{ seq: 1, type: "turn/start" }, assistantMessage("完整回复")]);
+const silentDeltas = [];
+const silentResult = await askAgentStreaming(silentHandle, "hi", { onDelta: (delta) => silentDeltas.push(delta) });
+assert.deepEqual(silentDeltas, ["完整回复"], "no published delta falls back to the aggregated reply");
+assert.equal(silentResult.text, "完整回复");
+
+// applyStreamChunk 同时接受帧内原始 chunk 与旧信封
+const chunkState = { blockHadDelta: false };
+assert.equal(applyStreamChunk({ type: "assistant/chunk", data: { chunk: { type: "text-delta", text: "a" } } }, chunkState), "a");
+assert.equal(applyStreamChunk({ type: "text-delta", text: "b" }, chunkState), "b");
+assert.equal(applyStreamChunk({ type: "block-end", block: { type: "text", text: "c" } }, { blockHadDelta: false }), "c");
+assert.equal(applyStreamChunk({ type: "text-delta" }, chunkState), undefined);
+assert.equal(applyStreamChunk(null, chunkState), undefined);
 
 console.log("wechat-openclaw-smoke: PASS");

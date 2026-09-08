@@ -47,6 +47,13 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 - 微信接入的 AgentBridge 适配宿主会话读取 API：宿主已移除 `Session.events`，改为 `session.snapshotEvents()` 读取事件流（`lib/wechat/vendor/bridge.js`）。微信 AI 回复要求宿主提供该 API（DSH 0.1.2-alpha.4 及以上）；更老宿主上该功能不可用。
 - 应用用量口径实证（rc.1 会话日志多代采样）：`inputTokens + outputTokens + cacheReadTokens ≡ totalTokens`，宿主不单列 cache-write 用量，现有聚合数值精确，无需改动。
 
+## v1.1.2 更新
+
+- 更新兼容 DeepSeek Harness 0.1.3-alpha.2（devDependencies 对齐到 0.1.3-alpha.2）。
+- 修复微信接入在 0.1.3-alpha.1 及以上宿主上**回复为空**：宿主取消了顶层 `assistant/chunk` 会话事件（Session format v2，流改嵌入 `assistant/message.data.stream`），实时增量改由 agent 作用域事件 `agent/assistant-stream` 的 `start` / `chunk` / `end` 帧发布。AgentBridge 改为订阅该帧通道，并保留旧宿主（≤ 0.1.2）的 `assistant/chunk` 兼容订阅（两通道互斥，双订阅不重叠）。
+- 新增增量兜底：宿主一个文本增量都没发布时，把 `assistant/message` 聚合出的回复整体交给发送器 —— 调用方只从 `onDelta` 取文本，缺这条兜底会「静默空回复」。
+- `test/wechat-openclaw-smoke.mjs` 新增 bridge 流式通道回归（v2 帧 / 旧信封 / 无增量兜底 / 订阅注销）；该套件此前对流式路径零覆盖，正是破坏能通过自检的原因。
+
 ## v1.0.0 更新
 
 - 一键重启 dsh web 后不再刷新旧页面，改为自动打开新窗口并关闭旧页面。

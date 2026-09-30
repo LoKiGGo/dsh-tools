@@ -234,6 +234,11 @@ mkdirSync(join(sessionsRoot, "session-3"), { recursive: true });
 writeFileSync(join(sessionsRoot, "session-3", "session.jsonl"), "x".repeat(2048)); // 2048 B
 mkdirSync(join(sessionsRoot, "session-4"), { recursive: true });
 writeFileSync(join(sessionsRoot, "session-4", "session.jsonl"), "yyyy"); // 4 B
+// v0.1.5-rc.1 宿主把文件名升级为「格式世代」形式 session[.vN].jsonl[.zstd]：
+// 目录里同时留着旧世代与当前世代文件，删除单元是整个会话目录。
+mkdirSync(join(sessionsRoot, "session-5"), { recursive: true });
+writeFileSync(join(sessionsRoot, "session-5", "session.v2.jsonl"), "z".repeat(120)); // 120 B（旧世代）
+writeFileSync(join(sessionsRoot, "session-5", "session.v3.jsonl"), "z".repeat(180)); // +180 B（当前世代）
 const wsA = join(tmp, "ws-a");
 mkdirSync(wsA, { recursive: true });
 writeFileSync(join(wsA, "payload.bin"), "p".repeat(100)); // 100 B
@@ -246,13 +251,16 @@ fakeCtx.get = (name) => {
 				{ header: { id: "session-2", createdAt: 2000 }, live: false, persisted: true },
 				{ header: { id: "session-3", createdAt: 3000 }, live: true, persisted: true },
 				{ header: { id: "session-4", createdAt: 4000 }, live: false, persisted: true },
+				{ header: { id: "session-5", createdAt: 5000 }, live: false, persisted: true },
 			],
 			readTitleSnapshots: async (ids) => ids.map((sessionId) => ({ sessionId, status: "fulfilled", value: { title: { title: "标题-" + sessionId } } })),
 		};
 	}
 	if (name === "sessionPersistence") {
 		return {
-			locate: (header) => ({ kind: "jsonl", path: join(sessionsRoot, header.id, "session.jsonl") }),
+			// session-5 用当前世代的带版本号命名；locate() 返回的是
+			// 「当前世代」文件，删除单元仍是整个会话目录。
+			locate: (header) => ({ kind: "jsonl", path: join(sessionsRoot, header.id, header.id === "session-5" ? "session.v3.jsonl" : "session.jsonl") }),
 		};
 	}
 	if (name === "workspaceRegistry") {
@@ -279,7 +287,7 @@ r = await call(apiRoute, "POST", "/dsh-tools/api/config/set", { key: "delete-cha
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/list", {});
 assert(r.status === 200 && r.body.ok === true, "delete-chat list succeeds with services present");
 const listed = r.body.value;
-assert(listed.length === 4, "list returns all sessions");
+assert(listed.length === 5, "list returns all sessions");
 assert(listed.find((s) => s.id === "session-1").workspace.path === wsA, "session workspace resolved from workspaceRegistry");
 assert(listed.find((s) => s.id === "session-2").workspace.id === "ws-b", "second workspace mapped");
 assert(listed.find((s) => s.id === "session-3").workspace.id === "ws-a" && listed.find((s) => s.id === "session-3").workspace.title === "工作区A", "workspace id and title carried");
@@ -290,6 +298,7 @@ assert(listed.find((s) => s.id === "session-1").sizeBytes === 15, "session size 
 assert(listed.find((s) => s.id === "session-2").sizeBytes === 16, "session size is the transcript file size");
 assert(listed.find((s) => s.id === "session-3").sizeBytes === 2048, "larger transcript size reported");
 assert(listed.find((s) => s.id === "session-4").sizeBytes === 4, "tiny session size reported");
+assert(listed.find((s) => s.id === "session-5").sizeBytes === 300, "generation-named logs (session.v2/v3.jsonl) are counted in the session size");
 assert(listed.find((s) => s.id === "session-1").workspace.sizeBytes === 2063, "workspace size = sum of its sessions' chat records (15+2048), not the workspace dir (100)");
 assert(listed.find((s) => s.id === "session-2").workspace.sizeBytes === 16, "workspace size works even when the workspace dir is missing");
 
@@ -297,7 +306,7 @@ assert(listed.find((s) => s.id === "session-2").workspace.sizeBytes === 16, "wor
 r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/list", { includeSizes: false });
 assert(r.status === 200 && r.body.ok === true, "delete-chat light list succeeds");
 const lightListed = r.body.value;
-assert(lightListed.length === 4, "light list returns all sessions");
+assert(lightListed.length === 5, "light list returns all sessions");
 assert(lightListed.every((s) => s.sizeBytes === null), "light list skips session sizes");
 assert(lightListed.every((s) => s.workspace === null || s.workspace.sizeBytes === null), "light list skips workspace sizes");
 
@@ -348,6 +357,50 @@ assert(r.status === 200 && r.body.ok === true && r.body.value.ok === true, "dele
 const rmSpawn = spawns[spawns.length - 1];
 assert(rmSpawn.argv.some((a) => typeof a === "string" && a.includes("Remove-Item") && a.includes("__room__")), "delete targets the WeChat session dir");
 fakeCtx.get = originalGet;
+
+// --- delete-chat: 格式世代命名的日志（session.vN.jsonl）也要能删 ---
+// v0.1.5-rc.1 起 locate() 返回的是带版本段的文件；旧口径只认
+// session.jsonl[.zstd]，会让新格式会话删除直接 bad-location。
+fakeCtx.get = (name) => {
+	if (name === "sessionQuery") {
+		return {
+			listSessions: async () => [{ header: { id: "session-5", createdAt: 5000 }, live: false, persisted: true }],
+			readTitleSnapshots: async (ids) => ids.map((sessionId) => ({ sessionId, status: "fulfilled", value: { title: { title: "世代会话" } } })),
+		};
+	}
+	if (name === "sessionPersistence") {
+		return { locate: (header) => ({ kind: "jsonl", path: join(sessionsRoot, header.id, "session.v3.jsonl") }) };
+	}
+	if (name === "workspaceRegistry") return { archivedSessionIds: [], list: () => [] };
+	if (name === "subprocess") {
+		return {
+			resolveExecutable: async (requested) => requested,
+			spawn: (spec) => {
+				spawns.push(spec);
+				return { done: Promise.resolve({ exitCode: 0 }), collected: {} };
+			},
+		};
+	}
+	if (name === "sandboxPolicy") return { workspaceRoot: "C:\\" };
+	return undefined;
+};
+r = await call(dcRoute, "POST", "/dsh-tools/delete-chat/api/delete", { sessionId: "session-5", confirmLive: false });
+assert(r.status === 200 && r.body.ok === true && r.body.value.ok === true, "delete succeeds for a generation-named log (session.v3.jsonl)");
+const genSpawn = spawns[spawns.length - 1];
+assert(genSpawn.argv.some((a) => typeof a === "string" && a.includes("Remove-Item") && a.includes("session-5")), "delete targets the generation-named session dir");
+fakeCtx.get = originalGet;
+
+// --- session-log 文件名口径（usage-daily / delete-chat 共用的单一出处） ---
+const { isSessionLogFilename, isZstdSessionLogFilename } = await import("../lib/features/session-log.js");
+for (const good of ["session.jsonl", "session.jsonl.zstd", "session.v0.jsonl", "session.v2.jsonl.zstd", "session.v3.jsonl.zstd", "session.v12.jsonl.zstd"]) {
+	assert(isSessionLogFilename(good) === true, `session-log accepts ${good}`);
+}
+for (const bad of ["session.migration.abc123.tmp", "session.migration.abc123.tmp.zstd", "extra.bin", "session.jsonl.tmp", "session.v3.jsonl.tmp", "Session.V3.jsonl.zstd", "session.v.jsonl.zstd", "not-session.jsonl", ""]) {
+	assert(isSessionLogFilename(bad) === false, `session-log rejects ${bad}`);
+}
+assert(isZstdSessionLogFilename("session.v3.jsonl.zstd") === true, "zstd walker accepts a generation-named compressed log");
+assert(isZstdSessionLogFilename("session.jsonl.zstd") === true, "zstd walker keeps accepting the legacy compressed log");
+assert(isZstdSessionLogFilename("session.v3.jsonl") === false, "zstd walker skips plaintext logs (no zstd frames)");
 
 // --- plugin-catalog: classification API (real route, fake manifest + loader) ---
 

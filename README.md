@@ -54,6 +54,22 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 - 新增增量兜底：宿主一个文本增量都没发布时，把 `assistant/message` 聚合出的回复整体交给发送器 —— 调用方只从 `onDelta` 取文本，缺这条兜底会「静默空回复」。
 - `test/wechat-openclaw-smoke.mjs` 新增 bridge 流式通道回归（v2 帧 / 旧信封 / 无增量兜底 / 订阅注销）；该套件此前对流式路径零覆盖，正是破坏能通过自检的原因。
 
+## v1.1.5 更新
+
+- 更新兼容 DeepSeek Harness **0.2.0-rc.2**（devDependencies 对齐到 0.2.0-rc.2；宿主 0.1.7-rc.2 → 0.2.0-rc.2 为跨 minor 升级，逐触点核对后确认**无破坏性变更命中本插件**）。
+- 修复**文生图工具 `generate_image` 静默注册失败**：宿主 `tools.register()` 强制要求 `output{schema,render}`，且 `parameters` 必须是「紧凑参数表」而非已编译的 JSON Schema；旧写法两项都不符，`register()` 抛 `TypeError` 后被本插件自己的 `try/catch` 吞掉，表现为「配置了文生图但 Agent 永远调不到工具、界面无任何提示」。现改用宿主导出的 `defineTool()` 统一生成定义（与 `lib/wechat/vendor/weixin/gateway.js` 写法一致），并把该 `catch` 的日志从 `api.log` 提升为 `console.error` 且写明后果，**不再静默**。
+- `test/wechat-openclaw-smoke.mjs` 新增 `generate_image` 定义形状回归：走真实 `register()` 路径截获定义，断言 `output{schema,render}` 存在、`parameters` 为编译后的 JSON Schema、`render` 输出内容块，并用宿主导出的 `validateArgs` / `validateJsonSchemaValue` 做正反双向校验（旧形状必须被宿主拒绝，否则用例失去意义）。
+- 依赖声明补全：运行时消费的宿主包（`dsh-agent` / `dsh-llm` / `dsh-session` / `dsh-tools`）加入 `peerDependencies`（`*` + `peerDependenciesMeta.optional`，可选以免在非宿主环境安装时报错）；`@deepseek-ai/dsh-cmdline` 补入 devDependencies，消除 `lib/wechat/vendor/weixin/` 下两个**不可达**文件对未声明依赖的裸引用。
+- 修复**应用用量数据停止更新**（2026-09-10 实测）：宿主把会话日志升级为「格式世代」命名 `session[.vN].jsonl[.zstd]`，旧口径只认字面量 `session.jsonl.zstd`，导致带版本号的日志（实测 37 个）全部扫不到，磁盘缓存与实际用量冻结在升级当天。判定口径收敛到 `lib/features/session-log.js`，`usage-daily` 扫描与 `delete-chat` 删除共用同一条规则。
+  - 0.2.0-rc.2 实测 `SESSION_FORMAT_VERSION` 仍为 **4**（与 0.1.7-rc.2 相同，未产生新世代），该正则继续覆盖，无需再改。
+- 修复**会话管理无法删除新格式会话**：`sessionDirOf()` 同款字面量口径会让带版本号的日志直接返回 `bad-location`。
+- `test/smoke.mjs` 补回归：世代命名日志的目录大小、删除路径，以及文件名判定表的正反用例（含迁移临时文件 `session.migration.*.tmp` 必须被拒）。
+- `client-smoke` 的 React 解析新增本包 devDependencies 兜底（profile 里没有 React 时不再整份失败）；React / react-dom 因此进入 devDependencies。
+
+> 依赖解析提示：`@deepseek-ai/dsh-agent` 等包把 `dsh-llm` / `dsh-session` / `dsh-scope` 等声明为**精确版本 peer**，因此升级 devDependencies 后必须**删除 `package-lock.json` 与 `node_modules` 重装**；沿用旧锁文件会因旧树的 peer 范围（`^0.1.5-rc.1`）无法接受新版本而报 `ERESOLVE`。
+>
+> 已知边界：`lib/wechat/vendor/weixin/` 下 15 个文件（含 `entry.js`、`gateway.js`、`driver.js`、`login-qr.js` 等）**不在任何运行路径上**（对 `lib/index.js` 做完整 ESM 可达性遍历确认），属迁移遗留的参考代码。本版只保证 `gateway.js` 可正常 import；`entry.js` 仍需额外安装其传递依赖 `commander` 才能加载，因不可达故未处理。
+
 ## v1.0.0 更新
 
 - 一键重启 dsh web 后不再刷新旧页面，改为自动打开新窗口并关闭旧页面。
@@ -194,7 +210,8 @@ SSE 消息格式：`data: {"type":"turn-done","data":{"sessionId":"..."}}`。
 
 ## 应用用量按天统计说明
 
-- 趋势柱状图优先读取会话日志（`<DSH_HOME>/sessions/**/session.jsonl.zstd`）中的真实 `assistant/message` usage，按请求实际发生日期聚合，而不是把整个会话累计值记到最后活跃日期。
+- 趋势柱状图优先读取会话日志（`<DSH_HOME>/sessions/**/session[.vN].jsonl.zstd`）中的真实 `assistant/message` usage，按请求实际发生日期聚合，而不是把整个会话累计值记到最后活跃日期。
+- 日志文件名带「格式世代」版本段（宿主 0.1.5 起写入 `session.v3.jsonl.zstd`，旧的无版本 `session.jsonl.zstd` 停在原地不再更新），判定口径收敛在 `lib/features/session-log.js`，供本功能与会话管理共用；只扫 `.zstd`（明文日志没有 zstd 帧，走不了这条解压管线）。
 - 首次请求会全量扫描并写入磁盘缓存；后续只对 `size/mtime` 变化的日志增量重扫。
 - 缓存文件：`<DSH_HOME>/profiles/web/plugins-data/dsh-tools-usage-daily.json`。
 - 费用按模型分别计价后求和；悬停柱状图可查看该日期的 Token、会话数、命中率与估算费用。
@@ -214,16 +231,29 @@ export const kind = "tool";              // "tool"=模型工具 | "feature"=UI/�
 // 注册逻辑；宿主在开关开启时调用，关闭时调用返回的 disposer。
 // ctx 为宿主 Cordis 上下文；api 提供 config()/featureEnabled()/broadcast()/
 // fence/writeOk/writeError/readJsonBody/log。
+import { defineTool } from "@deepseek-ai/dsh-tools";
+
 export function register(ctx, api) {
   // 例：注册一个模型工具
   const tools = ctx.get("tools");
   if (tools === undefined) return () => {};
-  const dispose = tools.register({
+  // ⚠️ 必须用宿主 defineTool() 包装，且三件套齐全，否则 register() 会抛错：
+  //   - parameters 用「紧凑参数表」（{name:{type,required,description}}），
+  //     不是已编译的 JSON Schema；
+  //   - output{schema,render} 是宿主**强制**字段；
+  //   - 记得包 try/catch 时别把错误吞掉 —— 静默失败会让工具凭空消失。
+  const dispose = tools.register(defineTool({
     name: "my_tool",
     description: "…",
-    parameters: { type: "object", properties: {}, required: [] },
-    execute: async () => ({ ok: true }),
-  });
+    parameters: {
+      query: { type: "string", required: true, description: "查询内容" },
+    },
+    output: {
+      schema: { type: "string" },
+      render: (_args, value) => [{ type: "text", text: `结果：${value}` }],
+    },
+    execute: async () => "ok",
+  }));
   return () => dispose();
 }
 
@@ -291,7 +321,7 @@ node test/restart-sequence-smoke.mjs  # 真实 restart 方法：响应+自退出
 node test/wechat-openclaw-smoke.mjs  # 微信接入：白名单/登录状态机/feature 元数据（不连真实微信）
 ```
 
-十个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
+十一个测试都不需要真实服务器，全部在临时目录下运行（通过临时 `DSH_HOME`
 隔离；仅 `client-smoke.mjs` 以只读方式解析真实 profile 中的 react 与
 react-dom/server 用于可选的服务端渲染，其余测试绝不触碰真实 profile）。
 注意：`restart-sequence-smoke.mjs` 的"复活进程"阶段在 DSH agent 沙箱内无法

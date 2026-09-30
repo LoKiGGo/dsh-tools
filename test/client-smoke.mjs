@@ -26,16 +26,28 @@ function resolveFromProfile(name) {
 	}
 }
 
-const reactDomServerPath = resolveFromProfile("react-dom/server");
+// React 优先取 profile（与线上 shell 同一份）；profile 里没有时退回本包
+// devDependencies 的 react / react-dom（CI 与本地开发开箱可跑）。
+function resolveReactDep(name) {
+	const fromProfile = resolveFromProfile(name);
+	if (fromProfile !== undefined) return fromProfile;
+	try {
+		return require.resolve(name);
+	} catch {
+		return undefined;
+	}
+}
+
+const reactDomServerPath = resolveReactDep("react-dom/server");
 // 必须让 React 与 react-dom/server 来自同一份依赖，否则 SSR 会因 React 副本不一致
 // 报 “Objects are not valid as a React child”。优先取 react-dom/server 同级的 react。
 const reactPath = reactDomServerPath === undefined
-	? resolveFromProfile("react")
+	? resolveReactDep("react")
 	: (() => {
 		try {
 			return require.resolve("react", { paths: [dirname(reactDomServerPath)] });
 		} catch {
-			return resolveFromProfile("react");
+			return resolveReactDep("react");
 		}
 	})();
 

@@ -249,4 +249,101 @@ assert.equal(applyStreamChunk({ type: "block-end", block: { type: "text", text: 
 assert.equal(applyStreamChunk({ type: "text-delta" }, chunkState), undefined);
 assert.equal(applyStreamChunk(null, chunkState), undefined);
 
+// --- generate_image 工具定义形状（回归：宿主 tools.register 契约）---
+// 宿主强制要求 output{schema,render}，且 parameters 必须是「紧凑参数表」而不是
+// 已编译的 JSON Schema；形状不符时 register() 抛错、被 try/catch 静默吞掉，
+// 表现为工具凭空消失。这里走真实的 register() 路径并用假 tools 截获定义。
+// 只需预置 env 即可让 image 能力判定为已配置（loadEnvFile 不覆盖已存在的变量）。
+process.env.AI_IMAGE_BASE_URL = "https://example.invalid/v1";
+process.env.AI_IMAGE_KEY = "sk-test";
+const captured = [];
+const noopDisposer = () => {};
+const toolCtx = {
+	get: (service) => (service === "tools" ? { register: (definition) => { captured.push(definition); return noopDisposer; } } : undefined),
+	effect: (fn) => { const d = fn(); return typeof d === "function" ? d : noopDisposer; },
+	on: () => noopDisposer,
+	webServer: { register: () => noopDisposer },
+};
+const toolApi = {
+	log: () => {},
+	config: () => ({ features: { "wechat.openclaw": true }, featureConfig: {} }),
+	featureEnabled: () => true,
+	broadcast: () => {},
+	fence: () => true,
+	writeOk: () => {},
+	writeError: () => {},
+	readJsonBody: async () => ({}),
+};
+feature.register(toolCtx, toolApi);
+
+assert.equal(captured.length, 1, "image 能力已配置时应恰好注册 generate_image 一个工具");
+const tool = captured[0];
+assert.equal(tool.name, "generate_image");
+assert.equal(typeof tool.description, "string", "工具必须有 description");
+assert.equal(typeof tool.execute, "function", "工具必须有 execute");
+
+// 形状断言：parameters 必须是编译后的 JSON Schema（由 defineTool 生成）
+assert.deepEqual(tool.parameters, {
+	type: "object",
+	properties: { prompt: { type: "string", description: "图片内容描述（中文）" } },
+	required: ["prompt"],
+});
+// 关键回归点：output{schema,render} 必须存在，否则宿主 register() 抛 TypeError
+assert.notEqual(tool.output, undefined, "工具定义必须带 output（宿主强制）");
+assert.equal(typeof tool.output.render, "function", "output.render 必须是函数（宿主强制）");
+assert.deepEqual(tool.output.schema, { type: "string" }, "output.schema 必须是 {type:'string'}");
+const rendered = tool.output.render({ prompt: "一只猫" }, "C:/tmp/cat.png");
+assert.equal(Array.isArray(rendered), true, "render 必须返回内容块数组");
+assert.equal(rendered[0].text.includes("图片已生成"), true, "render 文案应包含图片路径提示");
+
+// 回归点：用宿主导出的原语复刻 register() 的守卫，验证「提交的定义真能过闸」，
+// 并且旧写法仍然过不了 —— 否则本用例失去意义。
+// 宿主 register() 的守卫（0.2.0-rc.2）：要求 output 为对象且 output.render 是函数，
+// 再对 output.schema 调 assertSupportedJsonSchema；parameters 侧由 defineTool 编译。
+{
+	let defineTool;
+	let validateArgs;
+	let validateJsonSchemaValue;
+	let assertSupportedJsonSchema;
+	try {
+		({ defineTool, validateArgs, validateJsonSchemaValue, assertSupportedJsonSchema } = await import("@deepseek-ai/dsh-tools"));
+	} catch {
+		defineTool = undefined; // 宿主包不可用时跳过契约校验（上面的结构断言已覆盖）
+	}
+	if (typeof defineTool === "function") {
+		// 1) 提交的定义必须通过宿主守卫（这一步就是过去抛 TypeError 的地方）
+		assert.equal(typeof tool.output?.render, "function", "提交的定义必须满足 output.render 守卫");
+		assert.doesNotThrow(() => assertSupportedJsonSchema(tool.output.schema), "提交的 output.schema 必须被宿主接受");
+
+		// 2) 参数校验：新形状合法、缺参报错
+		const paramsSpec = { prompt: { type: "string", required: true, description: "图片内容描述（中文）" } };
+		assert.deepEqual(validateArgs(paramsSpec, { prompt: "一只猫" }), [], "紧凑参数表应接受合法参数");
+		assert.equal(validateArgs(paramsSpec, {}).length > 0, true, "缺少必填 prompt 应报错");
+		assert.equal(validateArgs(paramsSpec, { prompt: 123 }).length > 0, true, "参数类型错误应报错");
+
+		// 3) 输出校验：字符串通过、非字符串拒绝
+		assert.deepEqual(validateJsonSchemaValue(tool.output.schema, "C:/tmp/cat.png", "value"), [], "output.schema 应接受字符串结果");
+		assert.equal(validateJsonSchemaValue(tool.output.schema, 42, "value").length > 0, true, "output.schema 应拒绝非字符串结果");
+
+		// 4) 负向对照：旧写法（裸 JSON Schema + 无 output）必须仍然过不了闸
+		const oldShapeParameters = { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] };
+		assert.throws(
+			() => validateArgs(oldShapeParameters, { prompt: "x" }),
+			/unsupported JSON schema|must be a value schema object/,
+			"旧 parameters 形状（裸 JSON Schema）应被宿主拒绝 —— 这正是本回归的根因",
+		);
+
+		// 5) 真实定义可被 defineTool 重新构造出等价形状（两侧同源，防手工漂移）
+		const rebuilt = defineTool({
+			name: "generate_image",
+			description: "x",
+			parameters: paramsSpec,
+			output: { schema: { type: "string" }, render: (_a, v) => [{ type: "text", text: String(v) }] },
+			execute: async () => "x",
+		});
+		assert.deepEqual(rebuilt.parameters, tool.parameters, "defineTool 编译出的 parameters 应与真实定义一致");
+		assert.deepEqual(rebuilt.output.schema, tool.output.schema, "defineTool 编译出的 output.schema 应与真实定义一致");
+	}
+}
+
 console.log("wechat-openclaw-smoke: PASS");

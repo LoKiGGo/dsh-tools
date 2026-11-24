@@ -509,6 +509,14 @@ const badRes = fakeRes();
 await apiRoute.handler(badReq, badRes);
 assert(badRes.status === 403, "non-loopback host rejected by trust fence");
 
+// 0.2.1-alpha.1 起 trust 配置在 webStartup 服务上（loader 行不再带 trustedHosts）
+fakeCtx.get = (service) => (service === "webStartup" ? { trustedHosts: ["app.internal:3080"] } : undefined);
+const trustedReq = fakeReq("POST", "/dsh-tools/api/config", {});
+trustedReq.headers.host = "app.internal:3080";
+const trustedRes = fakeRes();
+await apiRoute.handler(trustedReq, trustedRes);
+assert(trustedRes.status === 200, "webStartup.trustedHosts admits a configured trusted host");
+
 // --- unknown method ---
 r = await call(apiRoute, "POST", "/dsh-tools/api/nope", {});
 assert(r.status === 404 && r.body.error.code === "not-found", "unknown api method 404s");

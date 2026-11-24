@@ -39,6 +39,7 @@ function buildFor(args) {
 		args,
 		cwd: tmp,
 		port: 59999, // nothing listens here → port-down marker expected
+		probeMs: 1500, // keep the smoke fast; default production window is 60s
 		env: {
 			DSH_TEST_MARKER: marker,
 			// parens in the name — the ${env:...} quoting must survive

@@ -132,6 +132,7 @@ assert(Array.isArray(captured.inject) && captured.inject.includes("slots") && ca
 
 const registered = [];
 const opened = [];
+const openedByWorkspace = [];
 const fakeCtx = {
 	slots: {
 		inject: (key, cb) => {
@@ -143,19 +144,25 @@ const fakeCtx = {
 		},
 	},
 	sessions: { open: (id) => opened.push(id) },
+	get: (name) => (name === "uiWorkspace" ? { openSession: (id) => openedByWorkspace.push(id) } : undefined),
 };
 
 const dispose = captured.apply(fakeCtx);
 assert(typeof dispose === "function", "apply returns a disposer");
-// settings.section + shell.overlay + settings.plugins.tab
+// settings.section + shell.overlay + plugins.tab
 assert(registered.length === 3, "three slot entries registered");
 
 const settingsReg = registered.find((r) => r.opts.name === "settings.section");
 const overlayReg = registered.find((r) => r.opts.name === "shell.overlay" && r.opts.id === "dsh-tools-notify");
-const catalogReg = registered.find((r) => r.opts.name === "settings.plugins.tab");
+const catalogReg = registered.find((r) => r.opts.name === "plugins.tab");
 assert(settingsReg !== undefined && settingsReg.opts.id === "dsh-tools" && settingsReg.opts.order === 35, "settings.section id dsh-tools order 35");
 assert(overlayReg !== undefined && overlayReg.opts.id === "dsh-tools-notify", "shell.overlay id dsh-tools-notify");
-assert(catalogReg !== undefined && catalogReg.opts.id === "plugin-catalog" && catalogReg.opts.order === 20 && catalogReg.opts.label === "插件分类", "settings.plugins.tab entry id plugin-catalog order 20");
+assert(catalogReg !== undefined && catalogReg.opts.id === "plugin-catalog" && catalogReg.opts.order === 20 && catalogReg.opts.label === "插件分类", "plugins.tab entry id plugin-catalog order 20");
+
+// --- session navigation: prefer uiWorkspace.openSession (0.2.3 client face) ---
+const openById = captured.__dshToolsTest.openSessionById;
+assert(typeof openById === "function", "test hook exports openSessionById");
+assert(openById("session-nav") === true && openedByWorkspace[0] === "session-nav" && opened.length === 0, "session navigation prefers uiWorkspace.openSession");
 
 // --- initial render paths (needs react + react-dom/server) ---
 

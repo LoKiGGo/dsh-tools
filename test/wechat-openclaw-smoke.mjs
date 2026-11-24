@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { normalizeAllowFrom, isAllowed } from "../lib/wechat/allowlist.js";
 import { createLoginSession, submitVerifyCode, cancelLogin, loginSnapshot } from "../lib/wechat/login.js";
 import { runWeixinGateway, shouldUseModlensFallback } from "../lib/wechat/gateway.js";
-import { askAgentStreaming, applyStreamChunk } from "../lib/wechat/vendor/bridge.js";
+import { askAgentStreaming, applyStreamChunk, applyModelSelection } from "../lib/wechat/vendor/bridge.js";
 import { saveWechatMedia } from "../lib/wechat/media-store.js";
 import { AI_CAPABILITIES } from "../lib/wechat/vendor/weixin/ai-config.js";
 import * as feature from "../lib/features/wechat-openclaw.js";
@@ -248,6 +248,18 @@ assert.equal(applyStreamChunk({ type: "text-delta", text: "b" }, chunkState), "b
 assert.equal(applyStreamChunk({ type: "block-end", block: { type: "text", text: "c" } }, { blockHadDelta: false }), "c");
 assert.equal(applyStreamChunk({ type: "text-delta" }, chunkState), undefined);
 assert.equal(applyStreamChunk(null, chunkState), undefined);
+
+// --- applyModelSelection: 0.2.1-alpha.4+ installModelSelection 单参适配 ---
+// 新版宿主只在 setup 里安装“切换提示”监听器，选择必须走 agent.model.select()。
+const selectedModels = [];
+const modelAgent = { model: { select: (selection) => selectedModels.push(selection) } };
+assert.equal(applyModelSelection(modelAgent, { provider: "deepseek-account", model: "deepseek-flash" }), true, "applies provider/model through agent.model.select");
+assert.deepEqual(selectedModels[0], { provider: "deepseek-account", model: "deepseek-flash" }, "selection carries provider and model only");
+assert.equal(applyModelSelection(modelAgent, { provider: "p", model: "m", reasoningEffort: "max" }), true, "applies an explicit reasoning effort");
+assert.equal(selectedModels[1].reasoningEffort, "max", "reasoningEffort preserved when present");
+assert.equal(applyModelSelection({}, { provider: "p", model: "m" }), false, "agent without a model face is skipped (old host)");
+assert.equal(applyModelSelection(null, { provider: "p", model: "m" }), false, "null agent is skipped");
+assert.equal(applyModelSelection(modelAgent, null), false, "null selection is skipped");
 
 // --- generate_image 工具定义形状（回归：宿主 tools.register 契约）---
 // 宿主强制要求 output{schema,render}，且 parameters 必须是「紧凑参数表」而不是

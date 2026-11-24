@@ -18,7 +18,7 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 | `delete-chat` | 会话管理 | 归档会话查看、单条/批量删除会话；列表显示每个会话与工作区占用的磁盘空间；v1.0.0 起先快速返回列表再后台补齐大小，并对目录大小做磁盘缓存，打开更快；删除会话页点击工作区路径可打开对应文件夹 | 开 |
 | `plugin-toggle` | 插件开关 | profile 已安装插件的启用/停用开关；点击插件名可跳转其 GitHub 页（有则显示），行内展示插件功能描述 | 开 |
 | `update-plugin` | 更新检查 | 检查/更新/卸载 profile 已安装插件；支持 npm 注册表与 GitHub（`github:` / `git+https://github.com/...` / URL spec，Releases/tags API 探测）安装来源；点击插件名可跳转其 GitHub 页（有则显示）；每次 dsh web 启动后仅首次打开该页签时自动检查，之后需手动点「重新检查」 | 开 |
-| `plugin-catalog` | 插件分类视图 | 「设置 → 插件」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
+| `plugin-catalog` | 插件分类视图 | 「设置 → 插件管理」新增「插件分类」页签：官方（安装 Harness 自带）/ 已安装（插件市场 / GitHub / npm）/ 本地（link:/file: 开发）三个分类筛选浏览；开关关闭时页签自动消失 | 开 |
 | `ui.usage` | 应用用量 | 「应用用量」页签：按时间跨度（今年 / 本月 / 近 7 天 / 近 3 天 / 自定义日期）与模型过滤聚合各会话用量（Token、缓存命中、时长、会话 / 步数）；趋势柱图优先读取会话日志按自然日统计真实 usage（磁盘缓存 + 增量扫描），悬停显示具体数据，会话用量列表展示 Token / 命中率 / 估算费用；支持价格配置，v1.0.0 起费用卡片可直接切换峰 / 谷价格（默认谷价） | 关 |
 | `wechat.openclaw` | 微信接入（OpenClaw） | 扫码绑定个人微信，通过腾讯 openclaw-weixin / iLink 协议与 DSH Agent 文字聊天；支持白名单、room / per-user 会话模式、网关启停；v1.0.0 起页签内“使用说明”可展开 / 折叠 | 关 |
 
@@ -69,6 +69,18 @@ DSH web 插件：个人通用工具箱。一个插件收纳多个功能/工具�
 > 依赖解析提示：`@deepseek-ai/dsh-agent` 等包把 `dsh-llm` / `dsh-session` / `dsh-scope` 等声明为**精确版本 peer**，因此升级 devDependencies 后必须**删除 `package-lock.json` 与 `node_modules` 重装**；沿用旧锁文件会因旧树的 peer 范围（`^0.1.5-rc.1`）无法接受新版本而报 `ERESOLVE`。
 >
 > 已知边界：`lib/wechat/vendor/weixin/` 下 15 个文件（含 `entry.js`、`gateway.js`、`driver.js`、`login-qr.js` 等）**不在任何运行路径上**（对 `lib/index.js` 做完整 ESM 可达性遍历确认），属迁移遗留的参考代码。本版只保证 `gateway.js` 可正常 import；`entry.js` 仍需额外安装其传递依赖 `commander` 才能加载，因不可达故未处理。
+
+## v1.1.6 更新
+
+- 更新兼容 DeepSeek Harness **0.2.3-alpha.2**（devDependencies 与深 import 基准对齐到 0.2.3-alpha.2；`@deepseek-ai/cordis` peer 由 `^4.0.1` 改为 `~4.2.0-alpha.1` —— 0.2.3 宿主带的是 cordis `4.2.0-alpha.1`，旧范围按 semver 预发布语义并不匹配）。
+- 修复**「插件分类」页签消失**：DSH 0.2.2-rc.3 删除了 `settings.plugins.tab` slot。页签改挂 `plugins.tab`（插件管理页「已安装」之后的页签行，与「插件市场」同一行），位置与行为不变，仍随功能开关实时注册 / 注销。
+- 修复**微信接入的模型选择协议**：0.2.1-alpha.4 起 `installModelSelection(agentCtx, selection)` 只剩单参（`ModelSelectionRef` 已删除），provider / model 也不能再由 `agent/request` 覆盖；改为 `installModelSelection(agentCtx)` + `agent.model.select(selection)`（新增 `applyModelSelection` 纯函数与回归用例）。
+- 适配 **WebServer 默认鉴权**（0.2.2-rc.2 起路由默认 `auth: 'required'`）：`/dsh-tools/api` 显式声明 `auth: "required"`；未登录请求返回 401（旧版可被本机 curl 无凭据访问，是旧默认值）。
+- 修复**信任主机取不到**（既有 bug）：旧逻辑判 `entry.options.name === "connection"`，但 loader 的 `options.name` 是模块名、`id` 才是 `include:connection`，因此永远为空。现优先读 `ctx.webStartup.trustedHosts`（0.2.1-alpha.1 起的官方来源），loader 行兜底，并在请求期惰性解析（服务可能晚于插件挂载）。
+- 修复**点通知不跳转会话**（既有 bug）：0.2.3 client 的 `sessions` face 没有 `open`；改用 `uiWorkspace.openSession()`（保留旧宿主 `sessions.open` 兜底）。会话管理页的「打开会话」同一修复。
+- 修复**通知的“当前会话”判定**（既有 bug）：`SessionListState` 没有 `current` 字段，旧订阅恒为 `undefined`；移除该死订阅。
+- 修复**重启端口探测误报**（既有 bug）：固定等 4s 对新宿主太短（2026-11-24 实测服务已起来却写 `port-down`）；改为最多 60s、每秒轮询，探到即写 `port-up`。
+- 审计报告见 `upgrade-report/dsh-tools-dsh-0.2.3-alpha.2-audit.md`。
 
 ## v1.0.0 更新
 
